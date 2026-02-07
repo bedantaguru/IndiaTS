@@ -1,0 +1,27 @@
+Package: IndiaTS
+Type: Package
+Title: Common Time Series Utilities for Indian Economic and Financial Data
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Indranil", "Gayen",
+      email = "nil.gayen@gmail.com",
+      role = c("aut", "cre")
+    ))
+Description: 
+    Provides a consistent and tidy framework for common time series
+    manipulations frequently used in Indian macroeconomic and financial
+    analysis. The package supports transformations such as month-on-month,
+    quarter-on-quarter, and year-on-year growth rates, CAGR and SAAR
+    calculations, seasonal adjustment, and calendar-based conversions.
+    Core functionality is built around an intermediate 'time-dataframe'
+    (tdf) abstraction that enables seamless integration with the tidyverse
+    ecosystem, including 'dplyr', 'ggplot2', and related tools, while
+    remaining compatible with base R time series objects.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports: 
+    magrittr
