@@ -276,20 +276,24 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   }
 
   # --------------------------------------------------
-  # 2. FY shorthand: FYxx
+  # 2. FY shorthand: FYxx or FYxxxx
   # --------------------------------------------------
 
   m_fy <- stringr::str_match(
     x,
-    stringr::regex("fy[^a-zA-Z0-9]*(\\d{2})", ignore_case = TRUE)
+    stringr::regex(
+      "fy[^a-zA-Z0-9]*(\\d{4}|\\d{2})",
+      ignore_case = TRUE
+    )
   )
 
   has_fy <- is.na(out) & !is.na(m_fy[, 1])
 
   if (any(has_fy)) {
 
-    yr <- as.integer(m_fy[has_fy, 2])
-    is_4d <- nchar(m_fy[has_fy, 2]) == 4
+    yr_str <- m_fy[has_fy, 2]
+    yr     <- as.integer(yr_str)
+    is_4d  <- nchar(yr_str) == 4
 
     current_year <- as.integer(format(Sys.Date(), "%Y"))
     current_cc   <- current_year %/% 100
@@ -297,10 +301,17 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
 
     start_year <- integer(sum(has_fy))
 
-    # FY2026 -> 2025-26 etc.
-    start_year[is_4d] <- yr[is_4d] - 1
+    # --------------------------------------------
+    # FYXXXX handling (no century adjustment)
+    # FY2026 -> 2025-26
+    # --------------------------------------------
+    if (any(is_4d)) {
+      start_year[is_4d] <- yr[is_4d] - 1
+    }
 
-    # FYxx handling
+    # --------------------------------------------
+    # FYxx handling (century inference)
+    # --------------------------------------------
     if (any(!is_4d)) {
 
       yy <- yr[!is_4d]

@@ -123,3 +123,82 @@ test_that("all supported financial quarter formats convert correctly", {
   )
 })
 
+
+test_that("financial year parsing works for FYxx, FYxxxx and YYYY-YY formats", {
+
+  raw <- c(
+    "FY14",
+    "FY 14",
+    "FY86",
+    "FY 86",
+    "FY2026",
+    "FY 2088",
+    "2013-14",
+    "1986-87"
+  )
+
+  x <- as_financial_period(raw)
+
+  ## sanity
+  expect_s3_class(x, financial_period_class)
+  expect_length(x, length(raw))
+
+  ## previous financial year
+  result <- previous_period(x)
+
+  expect_equal(
+    unclass(result),
+    c(
+      "2012-13",  # FY14
+      "2012-13",  # FY 14
+      "1984-85",  # FY86
+      "1984-85",  # FY 86
+      "2024-25",  # FY2026
+      "2086-87",  # FY 2088
+      "2012-13",  # 2013-14
+      "1985-86"   # 1986-87
+    )
+  )
+})
+
+
+
+test_that("previous_period and previous_year work for calendar quarters", {
+
+  raw <- c(
+    "Q1 2014",
+    "Q3 2014",
+    "Q4 2000"
+  )
+
+  x <- calendar_quarter(raw)
+
+  ## sanity
+  expect_s3_class(x, calendar_period_class)
+  expect_length(x, length(raw))
+
+  ## previous adjacent quarter
+  prev_p <- previous_period(x)
+
+  expect_equal(
+    unclass(prev_p),
+    c(
+      "Q4:2013",  # Q1 -> previous year Q4
+      "Q2:2014",  # Q3 -> Q2 same year
+      "Q3:2000"   # Q4 -> Q3 same year
+    )
+  )
+
+  ## same quarter, previous year
+  prev_y <- previous_year(x)
+
+  expect_equal(
+    unclass(prev_y),
+    c(
+      "Q1:2013",  # same quarter, year - 1
+      "Q3:2013",
+      "Q4:1999"
+    )
+  )
+})
+

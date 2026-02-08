@@ -139,7 +139,7 @@ financial_month <- function(x, with_year = TRUE){
 #' @export
 financial_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = TRUE){
   if(is_date_type(x)){
-    res <- financial_quarter_for_date(as.Date.(x), with_year = with_year)
+    res <- financial_quarter_for_date(as.Date(x), with_year = with_year)
   } else {
     if (inherits(x , calendar_period_class)) {
       res <- financial_quarter_for_date(calendar_quarter_to_date(x, anchor = "mid"))
