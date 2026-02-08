@@ -4,7 +4,7 @@
 \alias{financial_quarter}
 \title{Extract Indian Financial Quarter}
 \usage{
-financial_quarter(x, with_year = TRUE)
+financial_quarter(x, with_year = TRUE, auto_convert_calendar_quarter = TRUE)
 }
 \arguments{
 \item{x}{A vector representing time. Can be a date-like object

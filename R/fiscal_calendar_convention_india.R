@@ -179,6 +179,39 @@ financial_month_for_txt <- function(txt, with_year = TRUE) {
 
 
 
+extract_calendar_quarter_only <- function(x) {
+
+  # regex patterns (case-insensitive)
+  # Calendar quarters: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
+
+  pat_q1 <- stringr::regex(
+    "\\b(q1|jan(?:uary)?\\s*(?:-|–|to|_|\\s)\\s*mar(?:ch)?)\\b",
+    ignore_case = TRUE
+  )
+  pat_q2 <- stringr::regex(
+    "\\b(q2|apr(?:il)?\\s*(?:-|–|to|_|\\s)\\s*jun(?:e)?)\\b",
+    ignore_case = TRUE
+  )
+  pat_q3 <- stringr::regex(
+    "\\b(q3|jul(?:y)?\\s*(?:-|–|to|_|\\s)\\s*sep(?:t(?:ember)?)?)\\b",
+    ignore_case = TRUE
+  )
+  pat_q4 <- stringr::regex(
+    "\\b(q4|oct(?:ober)?\\s*(?:-|–|to|_|\\s)\\s*dec(?:ember)?)\\b",
+    ignore_case = TRUE
+  )
+
+  # extract first matching quarter
+  out <- rep(NA_character_, length(x))
+
+  out[stringr::str_detect(x, pat_q1) & is.na(out)] <- "q1"
+  out[stringr::str_detect(x, pat_q2) & is.na(out)] <- "q2"
+  out[stringr::str_detect(x, pat_q3) & is.na(out)] <- "q3"
+  out[stringr::str_detect(x, pat_q4) & is.na(out)] <- "q4"
+
+  out
+}
+
 extract_fy_quarter_only <- function(x) {
 
   # regex patterns (case-insensitive)
@@ -243,12 +276,12 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   }
 
   # --------------------------------------------------
-  # 2. FY shorthand: FYxx or FYxxxx
+  # 2. FY shorthand: FYxx
   # --------------------------------------------------
 
   m_fy <- stringr::str_match(
     x,
-    stringr::regex("fy\\s*(\\d{2}|\\d{4})", ignore_case = TRUE)
+    stringr::regex("fy[^a-zA-Z0-9]*(\\d{2})", ignore_case = TRUE)
   )
 
   has_fy <- is.na(out) & !is.na(m_fy[, 1])
@@ -293,6 +326,80 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   out
 }
 
+extract_calendar_year <- function(x, fy_over_two_century = TRUE) {
+
+  n <- length(x)
+  out <- rep(NA_integer_, n)
+
+  # --------------------------------------------------
+  # Extract both 4-digit and 2-digit years
+  # --------------------------------------------------
+
+  yrs_4_all <- stringr::str_extract_all(x, "\\b\\d{4}\\b")
+  lens_4 <- vapply(yrs_4_all, length, integer(1))
+
+  yrs_2_all <- stringr::str_extract_all(x, "\\b\\d{2}\\b")
+  lens_2 <- vapply(yrs_2_all, length, integer(1))
+
+  # --------------------------------------------------
+  # 1. Use YYYY only if:
+  #    - Exactly ONE 4-digit year found
+  #    - AND no 2-digit years present
+  # --------------------------------------------------
+
+  has_single_4_only <- (lens_4 == 1) & (lens_2 == 0)
+
+  if (any(has_single_4_only)) {
+    out[has_single_4_only] <- as.integer(unlist(yrs_4_all[has_single_4_only]))
+  }
+
+  # --------------------------------------------------
+  # 2. Use YY only if:
+  #    - Exactly ONE 2-digit year found
+  #    - AND no 4-digit years present
+  # --------------------------------------------------
+
+  has_single_2_only <- (lens_2 == 1) & (lens_4 == 0)
+
+  if (any(has_single_2_only)) {
+
+    yy <- as.integer(unlist(yrs_2_all[has_single_2_only]))
+
+    # Century inference logic
+    current_year <- as.integer(format(Sys.Date(), "%Y"))
+    current_cc   <- current_year %/% 100
+    current_yy   <- current_year %% 100
+
+    cc <- if (fy_over_two_century) {
+      ifelse(yy <= current_yy + 18, current_cc, current_cc - 1)
+    } else {
+      rep(current_cc, length(yy))
+    }
+
+    out[has_single_2_only] <- cc * 100 + yy
+  }
+
+  # All other cases (multiple years, mixed 4d+2d, etc.) remain NA
+
+  out
+}
+
+extract_calendar_quarter <- function(x) {
+  # extract components
+  q  <- extract_calendar_quarter_only(x)
+  yr <- extract_calendar_year(x)
+
+  # initialise output
+  out <- rep(NA_character_, length(x))
+
+  # only when BOTH quarter and year are present
+  both <- !is.na(q) & !is.na(yr)
+  out[both] <- paste0(toupper(q[both]), ":", yr[both])
+
+  out
+}
+
+
 extract_fy_quarter <- function(x) {
 
   # extract components
@@ -309,16 +416,53 @@ extract_fy_quarter <- function(x) {
   out
 }
 
-financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
+
+calendar_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
   anchor <- match.arg(anchor)
 
   out <- rep(as.Date(NA), length(x))
 
-  # strict pattern: Q1:YYYY-YY (any century)
-  pat <- "^Q([1-4]):(\\d{4})-(\\d{2})$"
+  # strict pattern: Q1:YYYY
+  pat <- "^Q([1-4]):(\\d{4})$"
 
   m <- stringr::str_match(x, pat)
+  valid <- !is.na(m[, 1])
+  if (!any(valid)) return(out)
+
+  q    <- as.integer(m[valid, 2])
+  year <- as.integer(m[valid, 3])
+
+  idx <- which(valid)
+
+  # start of calendar quarter
+  start_month <- c(1L, 4L, 7L, 10L)[q]
+  start_date  <- as.Date(sprintf("%04d-%02d-01", year, start_month))
+
+  # compute end of quarter
+  next_month <- c(4L, 7L, 10L, 1L)[q]
+  next_year  <- ifelse(q == 4L, year + 1L, year)
+
+  end_date <- as.Date(sprintf("%04d-%02d-01", next_year, next_month)) - 1
+
+  out[idx] <- switch(
+    anchor,
+    first = start_date,
+    last  = end_date,
+    mid   = start_date + as.integer((end_date - start_date) / 2)
+  )
+
+  out
+}
+
+financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
+
+  anchor <- match.arg(anchor)
+  out <- rep(as.Date(NA), length(x))
+
+  pat <- "^Q([1-4]):(\\d{4})-(\\d{2})$"
+  m <- stringr::str_match(x, pat)
+
   valid <- !is.na(m[, 1])
   if (!any(valid)) return(out)
 
@@ -326,7 +470,6 @@ financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
   fy_start <- as.integer(m[valid, 3])
   fy_end   <- as.integer(m[valid, 4])
 
-  # validate FY logic: YY == (YYYY + 1) %% 100
   ok  <- fy_end == (fy_start + 1) %% 100
   idx <- which(valid)[ok]
   if (!length(idx)) return(out)
@@ -334,17 +477,25 @@ financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
   q        <- q[ok]
   fy_start <- fy_start[ok]
 
-  # start of quarter
+  ## ---- START DATE ----
   start_month <- c(4L, 7L, 10L, 1L)[q]
   start_year  <- ifelse(q == 4L, fy_start + 1L, fy_start)
 
-  start_date <- as.Date(sprintf("%04d-%02d-01", start_year, start_month))
+  start_date <- as.Date(sprintf(
+    "%04d-%02d-01",
+    start_year, start_month
+  ))
 
-  # compute end of quarter (vector-safe)
+  ## ---- END DATE (FIXED) ----
   next_month <- c(7L, 10L, 1L, 4L)[q]
-  next_year  <- ifelse(q %in% c(1L, 2L, 3L), start_year, start_year + 1L)
+  next_year  <- ifelse(q %in% c(1L, 2L),
+                       fy_start,
+                       fy_start + 1L)
 
-  end_date <- as.Date(sprintf("%04d-%02d-01", next_year, next_month)) - 1
+  end_date <- as.Date(sprintf(
+    "%04d-%02d-01",
+    next_year, next_month
+  )) - 1L
 
   out[idx] <- switch(
     anchor,
@@ -404,6 +555,43 @@ financial_month_to_date <- function(x, anchor = c("mid", "first", "last")) {
   out
 }
 
+financial_year_to_date <- function(x, anchor = c("mid", "first", "last")) {
+
+  anchor <- match.arg(anchor)
+
+  out <- rep(as.Date(NA), length(x))
+
+  # strict pattern: YYYY-YY (any century)
+  pat <- "^(\\d{4})-(\\d{2})$"
+
+  m <- stringr::str_match(x, pat)
+  valid <- !is.na(m[, 1])
+  if (!any(valid)) return(out)
+
+  fy_start <- as.integer(m[valid, 2])
+  fy_end   <- as.integer(m[valid, 3])
+
+  # validate FY logic: YY == (YYYY + 1) %% 100
+  ok  <- fy_end == (fy_start + 1) %% 100
+  idx <- which(valid)[ok]
+  if (!length(idx)) return(out)
+
+  fy_start <- fy_start[ok]
+
+  # financial year runs from Apr 1 to Mar 31
+  start_date <- as.Date(sprintf("%04d-04-01", fy_start))
+  end_date   <- as.Date(sprintf("%04d-03-31", fy_start + 1L))
+
+  out[idx] <- switch(
+    anchor,
+    first = start_date,
+    last  = end_date,
+    mid   = start_date + as.integer((end_date - start_date) / 2)
+  )
+
+  out
+}
+
 
 financial_quarter_for_txt <- function(txt, with_year = TRUE){
   if(with_year){
@@ -425,11 +613,35 @@ financial_quarter_for_date <- function(date, with_year = TRUE) {
   )
 
   if (with_year) {
-    paste0(qtr, ":", financial_year(date))
+    res <- paste0(qtr, ":", financial_year(date))
+  } else {
+    res <- qtr
+  }
+
+  res <- ifelse(is.na(date), NA_character_, res)
+  res
+}
+
+
+calendar_quarter_for_txt <- function(txt, with_year = TRUE) {
+  if (with_year) {
+    extract_calendar_quarter(txt)
+  } else {
+    extract_calendar_quarter_only(txt)
+  }
+}
+
+calendar_quarter_for_date <- function(date, with_year = TRUE) {
+
+  qtr <- paste0("Q", lubridate::quarter(date))
+
+  if (with_year) {
+    paste0(qtr, ":", lubridate::year(date))
   } else {
     qtr
   }
 }
+
 
 
 financial_year_for_date <- function(date) {
@@ -442,4 +654,61 @@ financial_year_for_date <- function(date) {
   paste0(start_yr, "-", substr(end_yr, 3, 4))
 }
 
+
+
+previous_period_for_financial_period <- function(fp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
+
+  fp_date <- as.Date.financial_period(fp, anchor = "mid")
+
+  fqs <- frequency.financial_period(fp)
+
+  days_to_subtract <- dplyr::case_when(
+    fqs == "month" ~ as.numeric(lag_len["month"]),
+    fqs == "quarter" ~ as.numeric(lag_len["quarter"]),
+    fqs == "year" ~ as.numeric(lag_len["year"]),
+    TRUE ~ NA_real_
+  )
+
+  this_dates <- fp_date - days_to_subtract
+
+  out <- dplyr::case_when(
+    fqs == "month" ~ financial_month_for_date(this_dates, with_year = TRUE),
+    fqs == "quarter" ~ financial_quarter_for_date(this_dates, with_year = TRUE),
+    fqs == "year" ~ financial_year_for_date(this_dates),
+    TRUE ~ NA
+  )
+
+  class(out) <- class(fp)  # preserve class of input
+
+  out
+
+}
+
+previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
+
+  cp_date <- as.Date.calendar_period(cp, anchor = "mid")
+
+  fqs <- frequency.calendar_period(cp)
+
+  days_to_subtract <- dplyr::case_when(
+    fqs == "month" ~ as.numeric(lag_len["month"]),
+    fqs == "quarter" ~ as.numeric(lag_len["quarter"]),
+    fqs == "year" ~ as.numeric(lag_len["year"]),
+    TRUE ~ NA_real_
+  )
+
+  this_dates <- cp_date - days_to_subtract
+
+  out <- dplyr::case_when(
+    fqs == "month" ~ financial_month_for_date(this_dates, with_year = TRUE),
+    fqs == "quarter" ~ calendar_quarter_for_date(this_dates, with_year = TRUE),
+    fqs == "year" ~ as.character(lubridate::year(this_dates)),
+    TRUE ~ NA
+  )
+
+  class(out) <- class(cp)  # preserve class of input
+
+  out
+
+}
 
