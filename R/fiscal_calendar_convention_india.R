@@ -1,4 +1,6 @@
 
+.current_fixed_date <- as.Date("2026-01-01")
+
 extract_month_only <- function(x, warn = TRUE) {
 
   n <- length(x)
@@ -85,7 +87,7 @@ extract_month <- function(x, warn = TRUE, fy_over_two_century = TRUE) {
   yr <- rep(NA_integer_, n)
 
   # current year context (for 2-digit resolution)
-  current_year <- as.integer(format(Sys.Date(), "%Y"))
+  current_year <- as.integer(format(.current_fixed_date, "%Y"))
   current_cc   <- current_year %/% 100
   current_yy   <- current_year %% 100
 
@@ -159,6 +161,7 @@ extract_month <- function(x, warn = TRUE, fy_over_two_century = TRUE) {
 
 }
 
+# fiscal and calendar month are same as per convention, so we can reuse the same functions for both
 fiscal_month_for_date <- function(date, with_year = TRUE){
 
   if(with_year){
@@ -295,7 +298,7 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
     yr     <- as.integer(yr_str)
     is_4d  <- nchar(yr_str) == 4
 
-    current_year <- as.integer(format(Sys.Date(), "%Y"))
+    current_year <- as.integer(format(.current_fixed_date, "%Y"))
     current_cc   <- current_year %/% 100
     current_yy   <- current_year %% 100
 
@@ -377,7 +380,7 @@ extract_calendar_year <- function(x, fy_over_two_century = TRUE) {
     yy <- as.integer(unlist(yrs_2_all[has_single_2_only]))
 
     # Century inference logic
-    current_year <- as.integer(format(Sys.Date(), "%Y"))
+    current_year <- as.integer(format(.current_fixed_date, "%Y"))
     current_cc   <- current_year %/% 100
     current_yy   <- current_year %% 100
 
