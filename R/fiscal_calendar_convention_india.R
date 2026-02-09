@@ -247,7 +247,6 @@ extract_fy_quarter_only <- function(x) {
 }
 
 extract_fy <- function(x, fy_over_two_century = TRUE) {
-
   n <- length(x)
   out <- rep(NA_character_, n)
 
@@ -255,22 +254,16 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   # 1. Explicit range: YYYY-YY or YYYY–YY
   #    Valid only if YY == (YYYY + 1) %% 100
   # --------------------------------------------------
-
   m_range <- stringr::str_match(
     x,
     stringr::regex("(\\d{4})\\s*(?:-|–)\\s*(\\d{2})", ignore_case = TRUE)
   )
-
   has_range <- !is.na(m_range[, 1])
-
   if (any(has_range)) {
-
     y1 <- as.integer(m_range[has_range, 2])   # YYYY
     y2 <- as.integer(m_range[has_range, 3])   # YY
-
     ok <- y2 == (y1 + 1) %% 100
     idx <- which(has_range)[ok]
-
     out[idx] <- paste0(
       y1[ok],
       "-",
@@ -279,9 +272,50 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   }
 
   # --------------------------------------------------
-  # 2. FY shorthand: FYxx or FYxxxx
+  # 2. Two-digit year range: XX-XX or XX–XX
+  #    Valid only if second year == (first year + 1) %% 100
   # --------------------------------------------------
+  m_2digit <- stringr::str_match(
+    x,
+    stringr::regex("^\\s*(\\d{2})\\s*(?:-|–)\\s*(\\d{2})\\s*$", ignore_case = TRUE)
+  )
+  has_2digit <- is.na(out) & !is.na(m_2digit[, 1])
+  if (any(has_2digit)) {
+    yy1 <- as.integer(m_2digit[has_2digit, 2])  # First YY
+    yy2 <- as.integer(m_2digit[has_2digit, 3])  # Second YY
 
+    # Validate that it's consecutive years
+    ok <- yy2 == (yy1 + 1) %% 100
+
+    if (any(ok)) {
+      current_year <- as.integer(format(.current_fixed_date, "%Y"))
+      current_cc   <- current_year %/% 100
+      current_yy   <- current_year %% 100
+
+      yy1_valid <- yy1[ok]
+
+      # Century inference using same logic as FYxx
+      cc <- if (fy_over_two_century) {
+        # If yy1 is <= current_yy + 18, assume current century, else previous
+        ifelse(yy1_valid <= current_yy + 18, current_cc, current_cc - 1)
+      } else {
+        rep(current_cc, length(yy1_valid))
+      }
+
+      start_year <- cc * 100 + yy1_valid
+
+      idx <- which(has_2digit)[ok]
+      out[idx] <- paste0(
+        start_year,
+        "-",
+        sprintf("%02d", (start_year + 1) %% 100)
+      )
+    }
+  }
+
+  # --------------------------------------------------
+  # 3. FY shorthand: FYxx or FYxxxx
+  # --------------------------------------------------
   m_fy <- stringr::str_match(
     x,
     stringr::regex(
@@ -289,21 +323,15 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
       ignore_case = TRUE
     )
   )
-
   has_fy <- is.na(out) & !is.na(m_fy[, 1])
-
   if (any(has_fy)) {
-
     yr_str <- m_fy[has_fy, 2]
     yr     <- as.integer(yr_str)
     is_4d  <- nchar(yr_str) == 4
-
     current_year <- as.integer(format(.current_fixed_date, "%Y"))
     current_cc   <- current_year %/% 100
     current_yy   <- current_year %% 100
-
     start_year <- integer(sum(has_fy))
-
     # --------------------------------------------
     # FYXXXX handling (no century adjustment)
     # FY2026 -> 2025-26
@@ -311,25 +339,19 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
     if (any(is_4d)) {
       start_year[is_4d] <- yr[is_4d] - 1
     }
-
     # --------------------------------------------
     # FYxx handling (century inference)
     # --------------------------------------------
     if (any(!is_4d)) {
-
       yy <- yr[!is_4d]
-
       cc <- if (fy_over_two_century) {
         ifelse(yy <= current_yy + 18, current_cc, current_cc - 1)
       } else {
         rep(current_cc, length(yy))
       }
-
       start_year[!is_4d] <- cc * 100 + yy - 1
     }
-
     idx <- which(has_fy)
-
     out[idx] <- paste0(
       start_year,
       "-",
