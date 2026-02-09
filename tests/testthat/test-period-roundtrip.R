@@ -1,9 +1,9 @@
 
 ## ------------------------------------------------------------------
-## 1. Deterministic calendar → financial → calendar round-trip
+## 1. Deterministic calendar → fiscal → calendar round-trip
 ## ------------------------------------------------------------------
 
-test_that("calendar quarter round-trips through financial quarter", {
+test_that("calendar quarter round-trips through fiscal quarter", {
 
   years <- 2010:2030
   qtrs  <- paste0("Q", 1:4)
@@ -12,7 +12,7 @@ test_that("calendar quarter round-trips through financial quarter", {
   x <- structure(x, class = calendar_period_class)
 
   cal  <- calendar_quarter(x)
-  fin  <- financial_quarter(cal)
+  fin  <- fiscal_quarter(cal)
   back <- calendar_quarter(fin)
 
   expect_equal(back, cal)
@@ -28,7 +28,7 @@ test_that("loose calendar quarter text round-trips correctly", {
   x <- c("q1 2015", "q2 2015", "q3 2015", "q4 2015")
 
   cal  <- calendar_quarter(x)
-  fin  <- financial_quarter(cal)
+  fin  <- fiscal_quarter(cal)
   back <- calendar_quarter(fin)
 
   expect_equal(back, cal)
@@ -36,11 +36,11 @@ test_that("loose calendar quarter text round-trips correctly", {
 
 
 ## ------------------------------------------------------------------
-## 3. Financial-quarter stress test across wide year range
+## 3. fiscal-quarter stress test across wide year range
 ##    (1800–2150, randomised)
 ## ------------------------------------------------------------------
 
-test_that("financial quarters round-trip via calendar across wide year range", {
+test_that("fiscal quarters round-trip via calendar across wide year range", {
 
   set.seed(123)
 
@@ -52,10 +52,10 @@ test_that("financial quarters round-trip via calendar across wide year range", {
   fy_end   <- sprintf("%02d", (years + 1) %% 100)
 
   fin <- paste0(qtrs, ":", fy_start, "-", fy_end)
-  fin <- structure(fin, class = financial_period_class)
+  fin <- structure(fin, class = fiscal_period_class)
 
   cal  <- calendar_quarter(fin)
-  back <- financial_quarter(cal)
+  back <- fiscal_quarter(cal)
 
   expect_equal(back, fin)
 })
@@ -70,12 +70,12 @@ test_that("anchor choice does not change quarter identity", {
 
   x <- structure(
     paste0("Q", 1:4, ":2019-20"),
-    class = financial_period_class
+    class = fiscal_period_class
   )
 
-  d_first <- financial_quarter_to_date(x, anchor = "first")
-  d_mid   <- financial_quarter_to_date(x, anchor = "mid")
-  d_last  <- financial_quarter_to_date(x, anchor = "last")
+  d_first <- fiscal_quarter_to_date(x, anchor = "first")
+  d_mid   <- fiscal_quarter_to_date(x, anchor = "mid")
+  d_last  <- fiscal_quarter_to_date(x, anchor = "last")
 
   expect_equal(
     calendar_quarter(d_first),
@@ -97,11 +97,11 @@ test_that("FY Q3 and Q4 do not leak into adjacent years", {
 
   x <- structure(
     c("Q3:2014-15", "Q4:2014-15"),
-    class = financial_period_class
+    class = fiscal_period_class
   )
 
-  d_first <- financial_quarter_to_date(x, anchor = "first")
-  d_last  <- financial_quarter_to_date(x, anchor = "last")
+  d_first <- fiscal_quarter_to_date(x, anchor = "first")
+  d_last  <- fiscal_quarter_to_date(x, anchor = "last")
 
   expect_equal(d_first[1], as.Date("2014-10-01"))
   expect_equal(d_last[1],  as.Date("2014-12-31"))
@@ -112,7 +112,7 @@ test_that("FY Q3 and Q4 do not leak into adjacent years", {
 
 
 ## ------------------------------------------------------------------
-## 6. Calendar ↔ financial ↔ calendar idempotence on Date inputs
+## 6. Calendar ↔ fiscal ↔ calendar idempotence on Date inputs
 ## ------------------------------------------------------------------
 
 test_that("date-based quarter coercions are idempotent", {
@@ -124,7 +124,7 @@ test_that("date-based quarter coercions are idempotent", {
   )
 
   cal  <- calendar_quarter(dates)
-  fin  <- financial_quarter(cal)
+  fin  <- fiscal_quarter(cal)
   back <- calendar_quarter(fin)
 
   expect_equal(back, cal)

@@ -159,7 +159,7 @@ extract_month <- function(x, warn = TRUE, fy_over_two_century = TRUE) {
 
 }
 
-financial_month_for_date <- function(date, with_year = TRUE){
+fiscal_month_for_date <- function(date, with_year = TRUE){
 
   if(with_year){
     format(date,"%b:%Y")
@@ -169,7 +169,7 @@ financial_month_for_date <- function(date, with_year = TRUE){
 
 }
 
-financial_month_for_txt <- function(txt, with_year = TRUE) {
+fiscal_month_for_txt <- function(txt, with_year = TRUE) {
   if(with_year){
     extract_month(txt)
   } else {
@@ -466,7 +466,7 @@ calendar_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
   out
 }
 
-financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
+fiscal_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
   anchor <- match.arg(anchor)
   out <- rep(as.Date(NA), length(x))
@@ -518,7 +518,7 @@ financial_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
   out
 }
 
-financial_month_to_date <- function(x, anchor = c("mid", "first", "last")) {
+fiscal_month_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
   anchor <- match.arg(anchor)
 
@@ -566,7 +566,7 @@ financial_month_to_date <- function(x, anchor = c("mid", "first", "last")) {
   out
 }
 
-financial_year_to_date <- function(x, anchor = c("mid", "first", "last")) {
+fiscal_year_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
   anchor <- match.arg(anchor)
 
@@ -589,7 +589,7 @@ financial_year_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
   fy_start <- fy_start[ok]
 
-  # financial year runs from Apr 1 to Mar 31
+  # fiscal year runs from Apr 1 to Mar 31
   start_date <- as.Date(sprintf("%04d-04-01", fy_start))
   end_date   <- as.Date(sprintf("%04d-03-31", fy_start + 1L))
 
@@ -604,7 +604,7 @@ financial_year_to_date <- function(x, anchor = c("mid", "first", "last")) {
 }
 
 
-financial_quarter_for_txt <- function(txt, with_year = TRUE){
+fiscal_quarter_for_txt <- function(txt, with_year = TRUE){
   if(with_year){
     extract_fy_quarter(txt)
   } else {
@@ -612,7 +612,7 @@ financial_quarter_for_txt <- function(txt, with_year = TRUE){
   }
 }
 
-financial_quarter_for_date <- function(date, with_year = TRUE) {
+fiscal_quarter_for_date <- function(date, with_year = TRUE) {
 
   mon <- lubridate::month(date)
 
@@ -624,7 +624,7 @@ financial_quarter_for_date <- function(date, with_year = TRUE) {
   )
 
   if (with_year) {
-    res <- paste0(qtr, ":", financial_year(date))
+    res <- paste0(qtr, ":", fiscal_year(date))
   } else {
     res <- qtr
   }
@@ -655,7 +655,7 @@ calendar_quarter_for_date <- function(date, with_year = TRUE) {
 
 
 
-financial_year_for_date <- function(date) {
+fiscal_year_for_date <- function(date) {
   yr  <- lubridate::year(date)
   mon <- lubridate::month(date)
 
@@ -667,11 +667,11 @@ financial_year_for_date <- function(date) {
 
 
 
-previous_period_for_financial_period <- function(fp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
+previous_period_for_fiscal_period <- function(fp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
 
-  fp_date <- as.Date.financial_period(fp, anchor = "mid")
+  fp_date <- as.Date.fiscal_period(fp, anchor = "mid")
 
-  fqs <- frequency.financial_period(fp)
+  fqs <- frequency.fiscal_period(fp)
 
   days_to_subtract <- dplyr::case_when(
     fqs == "month" ~ as.numeric(lag_len["month"]),
@@ -683,9 +683,9 @@ previous_period_for_financial_period <- function(fp, lag_len = c("month" = 30, "
   this_dates <- fp_date - days_to_subtract
 
   out <- dplyr::case_when(
-    fqs == "month" ~ financial_month_for_date(this_dates, with_year = TRUE),
-    fqs == "quarter" ~ financial_quarter_for_date(this_dates, with_year = TRUE),
-    fqs == "year" ~ financial_year_for_date(this_dates),
+    fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
+    fqs == "quarter" ~ fiscal_quarter_for_date(this_dates, with_year = TRUE),
+    fqs == "year" ~ fiscal_year_for_date(this_dates),
     TRUE ~ NA
   )
 
@@ -711,7 +711,7 @@ previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "q
   this_dates <- cp_date - days_to_subtract
 
   out <- dplyr::case_when(
-    fqs == "month" ~ financial_month_for_date(this_dates, with_year = TRUE),
+    fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
     fqs == "quarter" ~ calendar_quarter_for_date(this_dates, with_year = TRUE),
     fqs == "year" ~ as.character(lubridate::year(this_dates)),
     TRUE ~ NA

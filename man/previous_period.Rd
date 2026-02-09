@@ -7,7 +7,7 @@
 previous_period(x)
 }
 \arguments{
-\item{x}{A character vector of class \code{financial_period} or
+\item{x}{A character vector of class \code{fiscal_period} or
 \code{calendar_period}.}
 }
 \value{
@@ -16,7 +16,7 @@ immediately preceding periods.
 }
 \description{
 Returns the immediately preceding period of the same frequency for each
-element of a financial or calendar period vector.
+element of a fiscal or calendar period vector.
 }
 \details{
 For example:
@@ -28,16 +28,16 @@ For example:
 
 The function is an S3-style dispatcher and selects the appropriate internal
 method based on the class of \code{x}. Supported classes are
-\code{financial_period} and \code{calendar_period}. Supplying any other
+\code{fiscal_period} and \code{calendar_period}. Supplying any other
 input will result in an error.
 }
 \examples{
-# Monthly financial periods
-x <- as_financial_period(c("Jan:2014", "Feb:2014", "Mar:2014"))
+# Monthly fiscal periods
+x <- as_fiscal_period(c("Jan:2014", "Feb:2014", "Mar:2014"))
 previous_period(x)
 
-# Quarterly financial periods
-q <- as_financial_period(c("Q1:2024-25", "Q2:2024-25"))
+# Quarterly fiscal periods
+q <- as_fiscal_period(c("Q1:2024-25", "Q2:2024-25"))
 previous_period(q)
 
 # Calendar periods

@@ -8,7 +8,7 @@ test_that("FY year inference switches at March boundary", {
     "Dec:2023-24"   # should map to 2023
   )
 
-  res <- financial_month(x, with_year = TRUE)
+  res <- fiscal_month(x, with_year = TRUE)
 
   expect_equal(
     as.character(res),
@@ -17,14 +17,14 @@ test_that("FY year inference switches at March boundary", {
 })
 
 
-test_that("calendar quarter auto-converts when financial quarter is NA", {
+test_that("calendar quarter auto-converts when fiscal quarter is NA", {
 
   x <- c(
     "Q1:2023",     # calendar quarter only
-    "Q2:2023-24"   # valid financial quarter
+    "Q2:2023-24"   # valid fiscal quarter
   )
 
-  res <- financial_quarter(
+  res <- fiscal_quarter(
     x,
     with_year = TRUE,
     auto_convert_calendar_quarter = TRUE
@@ -39,15 +39,15 @@ test_that("frequency detection returns mixed when needed", {
 
   x <- c("Jan:2023", "Q1:2023-24")
 
-  freq <- x %>% as_financial_period() %>% frequency(singular = TRUE)
+  freq <- x %>% as_fiscal_period() %>% frequency(singular = TRUE)
 
   expect_equal(freq, "mixed")
 })
 
 
-test_that("financial year anchor returns correct dates", {
+test_that("fiscal year anchor returns correct dates", {
 
-  x <- financial_year("FY:2023")
+  x <- fiscal_year("FY:2023")
 
   expect_equal(
     as.Date(x, anchor = "first"),
@@ -66,12 +66,12 @@ test_that("financial year anchor returns correct dates", {
 })
 
 
-test_that("financial quarter and month works on dates", {
+test_that("fiscal quarter and month works on dates", {
 
   dates <- as.Date(c("2023-01-15", "2023-04-15", "2023-07-15", "2023-10-15"))
 
-  qtr <- financial_quarter(dates, with_year = TRUE)
-  mth <- financial_month(dates, with_year = TRUE)
+  qtr <- fiscal_quarter(dates, with_year = TRUE)
+  mth <- fiscal_month(dates, with_year = TRUE)
 
   expect_equal(
     as.character(qtr),
@@ -86,10 +86,10 @@ test_that("financial quarter and month works on dates", {
 })
 
 
-test_that("financial_quarter infers FY and quarter from lowercase short text", {
+test_that("fiscal_quarter infers FY and quarter from lowercase short text", {
 
   expect_equal(
-    as.character(financial_quarter("q1 15")),
+    as.character(fiscal_quarter("q1 15")),
     "Q4:2014-15"
   )
 })

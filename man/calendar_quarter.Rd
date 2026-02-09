@@ -4,7 +4,7 @@
 \alias{calendar_quarter}
 \title{Calendar quarter extractor}
 \usage{
-calendar_quarter(x, with_year = TRUE, auto_convert_financial_quarter = TRUE)
+calendar_quarter(x, with_year = TRUE, auto_convert_fiscal_quarter = TRUE)
 }
 \arguments{
 \item{x}{A character vector or Date vector}

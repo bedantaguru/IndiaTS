@@ -10,7 +10,7 @@ Authors@R: c(
     ))
 Description: 
     Provides a consistent and tidy framework for common time series
-    manipulations frequently used in Indian macroeconomic and financial
+    manipulations frequently used in Indian macroeconomic and fiscal
     analysis. The package supports transformations such as month-on-month,
     quarter-on-quarter, and year-on-year growth rates, CAGR and SAAR
     calculations, seasonal adjustment, and calendar-based conversions.

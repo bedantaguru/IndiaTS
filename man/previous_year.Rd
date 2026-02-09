@@ -7,7 +7,7 @@
 previous_year(x)
 }
 \arguments{
-\item{x}{A character vector of class \code{financial_period} or
+\item{x}{A character vector of class \code{fiscal_period} or
 \code{calendar_period}.}
 }
 \value{
@@ -16,7 +16,7 @@ corresponding periods from the previous year.
 }
 \description{
 Returns the period corresponding to the same frequency in the previous year
-for each element of a financial or calendar period vector.
+for each element of a fiscal or calendar period vector.
 }
 \details{
 Unlike \code{\link{previous_period}}, which moves back by one period unit
@@ -35,12 +35,12 @@ representation by a one-year lag (365 days) and re-mapping it back to the
 appropriate period format.
 }
 \examples{
-# Monthly financial periods
-x <- as_financial_period(c("Jan:2014", "Feb:2014"))
+# Monthly fiscal periods
+x <- as_fiscal_period(c("Jan:2014", "Feb:2014"))
 previous_year(x)
 
-# Quarterly financial periods
-q <- as_financial_period("Q3:2024-25")
+# Quarterly fiscal periods
+q <- as_fiscal_period("Q3:2024-25")
 previous_year(q)
 
 # Calendar years

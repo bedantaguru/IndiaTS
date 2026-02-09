@@ -1,15 +1,15 @@
 
-#' Extract Indian Financial Month
+#' Extract Indian fiscal Month
 #'
-#' Determines the Indian financial month corresponding to a date or a
-#' textual representation of a financial reporting period. The function
+#' Determines the Indian fiscal month corresponding to a date or a
+#' textual representation of a fiscal reporting period. The function
 #' supports both date-like inputs and character strings commonly encountered
 #' in economic data, corporate disclosures, and administrative records.
 #'
-#' The Indian financial year follows the April–March convention. Financial
+#' The Indian fiscal year follows the April–March convention. fiscal
 #' months are interpreted relative to this fiscal calendar; however, when
 #' year information is included in the output, it reflects the **calendar
-#' year associated with the month**, not the financial year label.
+#' year associated with the month**, not the fiscal year label.
 #'
 #' For character inputs, the function recognises month names and month-based
 #' expressions embedded in free-form text. When possible, the corresponding
@@ -25,19 +25,19 @@
 #'   associated with the month is included in the output when available.
 #'   If \code{FALSE}, only the month identifier is returned.
 #'
-#' @return A character vector representing the financial month. Depending on
+#' @return A character vector representing the fiscal month. Depending on
 #'   the input and \code{with_year}, values may include a month label with
 #'   calendar year information or only the month component. Elements that
 #'   cannot be parsed return \code{NA}.
 #'
 #' @examples
 #' ## Date inputs
-#' financial_month(as.Date("2024-04-15"))
-#' financial_month(as.Date("2025-01-10"), with_year = FALSE)
+#' fiscal_month(as.Date("2024-04-15"))
+#' fiscal_month(as.Date("2025-01-10"), with_year = FALSE)
 #'
 #' ## Character inputs with month information
-#' financial_month("April 2024")
-#' financial_month("Jan 2023")
+#' fiscal_month("April 2024")
+#' fiscal_month("Jan 2023")
 #'
 #' ## Mixed real-world inputs
 #' x <- c(
@@ -46,42 +46,42 @@
 #'   "Results for July 2023",
 #'   "random note"
 #' )
-#' financial_month(x)
+#' fiscal_month(x)
 #'
 #' ## Vectorised usage
 #' dates <- seq(as.Date("2024-04-01"), by = "month", length.out = 6)
-#' financial_month(dates)
+#' fiscal_month(dates)
 #'
 #' @seealso
-#' \code{\link{financial_year}},
-#' \code{\link{financial_quarter}}
+#' \code{\link{fiscal_year}},
+#' \code{\link{fiscal_quarter}}
 #'
 #' @export
-financial_month <- function(x, with_year = TRUE){
+fiscal_month <- function(x, with_year = TRUE){
   if(is_date_type(x)){
-    res <- financial_month_for_date(as.Date(x), with_year = with_year)
+    res <- fiscal_month_for_date(as.Date(x), with_year = with_year)
   } else {
     if(is.character(x)){
-      res <- financial_month_for_txt(x, with_year = with_year)
+      res <- fiscal_month_for_txt(x, with_year = with_year)
     } else {
       stop("Input must be either a date or character vector.", call. = FALSE)
     }
   }
-  class(res) <- financial_period_class
+  class(res) <- fiscal_period_class
   res
 }
 
 
 
 
-#' Extract Indian Financial Quarter
+#' Extract Indian fiscal Quarter
 #'
-#' Determines the Indian financial quarter corresponding to a date or a
-#' textual representation of a financial reporting period. The function
+#' Determines the Indian fiscal quarter corresponding to a date or a
+#' textual representation of a fiscal reporting period. The function
 #' supports both date-like inputs and free-form character strings commonly
 #' found in economic, corporate, and administrative datasets.
 #'
-#' The financial year follows the April–March convention:
+#' The fiscal year follows the April–March convention:
 #' \itemize{
 #'   \item Q1: April–June
 #'   \item Q2: July–September
@@ -90,35 +90,35 @@ financial_month <- function(x, with_year = TRUE){
 #' }
 #'
 #' For character inputs, the function recognises quarter labels (e.g. \code{Q1}),
-#' month ranges (e.g. \code{Apr-Jun}, \code{October to December}), and financial
+#' month ranges (e.g. \code{Apr-Jun}, \code{October to December}), and fiscal
 #' year formats such as \code{FY24}, \code{FY2024}, or \code{2023-24}.
 #'
-#' A full quarter–financial-year label is returned only when both components
+#' A full quarter–fiscal-year label is returned only when both components
 #' can be identified. Invalid or unrelated text results in \code{NA}.
 #'
 #' @param x A vector representing time. Can be a date-like object
-#'   (\code{Date}, \code{POSIXct}) or a character vector describing a financial
-#'   quarter, month range, or financial year.
+#'   (\code{Date}, \code{POSIXct}) or a character vector describing a fiscal
+#'   quarter, month range, or fiscal year.
 #'
-#' @param with_year Logical. If \code{TRUE} (default), the financial year is
+#' @param with_year Logical. If \code{TRUE} (default), the fiscal year is
 #'   included in the output when available. If \code{FALSE}, only the quarter
 #'   identifier is returned.
 #'
-#' @return A character vector of financial quarter labels.
+#' @return A character vector of fiscal quarter labels.
 #'   Possible values include \code{"Q1:2024-25"}, \code{"Q3"}, or \code{NA}.
 #'
 #' @examples
 #' ## Date inputs
-#' financial_quarter(as.Date("2024-06-30"))
-#' financial_quarter(as.Date("2025-02-10"), with_year = FALSE)
+#' fiscal_quarter(as.Date("2024-06-30"))
+#' fiscal_quarter(as.Date("2025-02-10"), with_year = FALSE)
 #'
 #' ## Character inputs with quarter labels
-#' financial_quarter("Q1 FY2024")
-#' financial_quarter("q4 2022-23")
+#' fiscal_quarter("Q1 FY2024")
+#' fiscal_quarter("q4 2022-23")
 #'
 #' ## Month-range based inputs
-#' financial_quarter("Apr-Jun FY24")
-#' financial_quarter("October to December 2023-24")
+#' fiscal_quarter("Apr-Jun FY24")
+#' fiscal_quarter("October to December 2023-24")
 #'
 #' ## Mixed and messy real-world inputs
 #' x <- c(
@@ -127,28 +127,28 @@ financial_month <- function(x, with_year = TRUE){
 #'   "January to March FY2022",
 #'   "random note"
 #' )
-#' financial_quarter(x)
+#' fiscal_quarter(x)
 #'
 #' ## Vectorised usage in data workflows
 #' dates <- seq(as.Date("2024-04-01"), by = "month", length.out = 6)
-#' financial_quarter(dates)
+#' fiscal_quarter(dates)
 #'
 #' @seealso
-#' \code{\link{financial_year}}
+#' \code{\link{fiscal_year}}
 #'
 #' @export
-financial_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = TRUE){
+fiscal_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = TRUE){
   if(is_date_type(x)){
-    res <- financial_quarter_for_date(as.Date(x), with_year = with_year)
+    res <- fiscal_quarter_for_date(as.Date(x), with_year = with_year)
   } else {
     if (inherits(x , calendar_period_class)) {
-      res <- financial_quarter_for_date(calendar_quarter_to_date(x, anchor = "mid"))
+      res <- fiscal_quarter_for_date(calendar_quarter_to_date(x, anchor = "mid"))
     } else {
       if(is.character(x)){
-        res <- financial_quarter_for_txt(x, with_year = with_year)
+        res <- fiscal_quarter_for_txt(x, with_year = with_year)
         if(auto_convert_calendar_quarter) {
           res_alt <- calendar_quarter_for_txt(x, with_year = with_year)
-          res_alt <- financial_quarter_for_date(calendar_quarter_to_date(res_alt, anchor = "mid"))
+          res_alt <- fiscal_quarter_for_date(calendar_quarter_to_date(res_alt, anchor = "mid"))
           res <- ifelse(is.na(res), res_alt, res)
         }
       } else {
@@ -156,7 +156,7 @@ financial_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter
       }
     }
   }
-  class(res) <- financial_period_class
+  class(res) <- fiscal_period_class
   res
 }
 
@@ -176,7 +176,7 @@ financial_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter
 #' calendar_quarter(as.Date("2025-08-15"), with_year = FALSE)
 #'
 #' @export
-calendar_quarter <- function(x, with_year = TRUE, auto_convert_financial_quarter = TRUE) {
+calendar_quarter <- function(x, with_year = TRUE, auto_convert_fiscal_quarter = TRUE) {
 
   if (is_date_type(x)) {
 
@@ -187,10 +187,10 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_financial_quarter
 
   } else {
 
-    if (inherits(x, financial_period_class)) {
+    if (inherits(x, fiscal_period_class)) {
 
       res <- calendar_quarter_for_date(
-        financial_quarter_to_date(x, anchor = "mid"),
+        fiscal_quarter_to_date(x, anchor = "mid"),
         with_year = with_year
       )
 
@@ -204,16 +204,16 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_financial_quarter
         )
 
         # similar to above add auto conversion from fiscal calender
-        if(auto_convert_financial_quarter) {
-          res_alt <- financial_quarter_for_txt(x, with_year = with_year)
-          res_alt <- calendar_quarter_for_date(financial_quarter_to_date(res_alt, anchor = "mid"))
+        if(auto_convert_fiscal_quarter) {
+          res_alt <- fiscal_quarter_for_txt(x, with_year = with_year)
+          res_alt <- calendar_quarter_for_date(fiscal_quarter_to_date(res_alt, anchor = "mid"))
           res <- ifelse(is.na(res), res_alt, res)
         }
 
       } else {
 
         stop(
-          "Input must be either a date, character or financial_period vector.",
+          "Input must be either a date, character or fiscal_period vector.",
           call. = FALSE
         )
       }
@@ -229,42 +229,42 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_financial_quarter
 
 
 
-#' Extract Indian Financial Year
+#' Extract Indian fiscal Year
 #'
-#' Determines the Indian financial year corresponding to a date or a
-#' textual representation of a financial reporting period. The function
+#' Determines the Indian fiscal year corresponding to a date or a
+#' textual representation of a fiscal reporting period. The function
 #' supports both date-like inputs and character strings commonly found in
 #' macroeconomic data, corporate disclosures, and administrative records.
 #'
-#' The Indian financial year follows the April–March convention and is
+#' The Indian fiscal year follows the April–March convention and is
 #' returned in the standard \code{"YYYY-YY"} format (e.g. \code{"2023-24"}).
 #'
-#' For character inputs, the function recognises explicit financial year
+#' For character inputs, the function recognises explicit fiscal year
 #' ranges (e.g. \code{"2023-24"}) as well as shorthand notations such as
-#' \code{"FY24"} or \code{"FY2024"}. Two-digit financial years are interpreted
+#' \code{"FY24"} or \code{"FY2024"}. Two-digit fiscal years are interpreted
 #' relative to the current century using conservative disambiguation rules.
 #'
 #' Invalid or unrelated text results in \code{NA}.
 #'
 #' @param x A vector representing time. Can be a date-like object
 #'   (\code{Date}, \code{POSIXct}) or a character vector describing a
-#'   financial year.
+#'   fiscal year.
 #'
-#' @return A character vector of financial years in \code{"YYYY-YY"} format,
-#'   or \code{NA} when the financial year cannot be determined.
+#' @return A character vector of fiscal years in \code{"YYYY-YY"} format,
+#'   or \code{NA} when the fiscal year cannot be determined.
 #'
 #' @examples
 #' ## Date inputs
-#' financial_year(as.Date("2024-06-30"))
-#' financial_year(as.Date("2025-01-15"))
+#' fiscal_year(as.Date("2024-06-30"))
+#' fiscal_year(as.Date("2025-01-15"))
 #'
 #' ## Character inputs: explicit ranges
-#' financial_year("2023-24")
-#' financial_year("Financial Year 2022–23")
+#' fiscal_year("2023-24")
+#' fiscal_year("fiscal Year 2022–23")
 #'
 #' ## Character inputs: FY notation
-#' financial_year("FY2024")
-#' financial_year("FY24")
+#' fiscal_year("FY2024")
+#' fiscal_year("FY24")
 #'
 #' ## Mixed real-world inputs
 #' x <- c(
@@ -273,19 +273,19 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_financial_quarter
 #'   "Results for FY24",
 #'   "random text"
 #' )
-#' financial_year(x)
+#' fiscal_year(x)
 #'
 #' ## Vectorised usage
 #' dates <- seq(as.Date("2023-01-01"), by = "quarter", length.out = 6)
-#' financial_year(dates)
+#' fiscal_year(dates)
 #'
 #' @seealso
-#' \code{\link{financial_quarter}}
+#' \code{\link{fiscal_quarter}}
 #'
 #' @export
-financial_year <- function(x){
+fiscal_year <- function(x){
   if(is_date_type(x)){
-    res <- financial_year_for_date(as.Date(x))
+    res <- fiscal_year_for_date(as.Date(x))
   } else {
     if(is.character(x)){
       res <- extract_fy(x)
@@ -293,36 +293,36 @@ financial_year <- function(x){
       stop("Input must be either a date or character vector.", call. = FALSE)
     }
   }
-  class(res) <- financial_period_class
+  class(res) <- fiscal_period_class
   res
 }
 
 
 
 
-#' Parse character input as financial periods
+#' Parse character input as fiscal periods
 #'
-#' Coerces a character vector representing financial time periods into a
-#' standardized financial period format.
+#' Coerces a character vector representing fiscal time periods into a
+#' standardized fiscal period format.
 #'
 #' Parsing is attempted in order of decreasing temporal granularity:
 #' \itemize{
-#'   \item Financial month (finest resolution)
-#'   \item Financial quarter
-#'   \item Financial year (coarsest resolution, optional)
+#'   \item fiscal month (finest resolution)
+#'   \item fiscal quarter
+#'   \item fiscal year (coarsest resolution, optional)
 #' }
 #'
 #' For each element, the first successful match is retained. Elements that
 #' cannot be parsed at any supported resolution are returned as \code{NA}.
 #'
-#' @param x A character vector representing financial periods.
-#' @param with_year Logical. If \code{TRUE}, financial year detection is used
+#' @param x A character vector representing fiscal periods.
+#' @param with_year Logical. If \code{TRUE}, fiscal year detection is used
 #'   as a fallback when month and quarter detection fail.
 #'
 #' @return
 #' A character vector of the same length as \code{x}, containing standardized
-#' financial period labels. The result is assigned class
-#' \code{financial_period_class}.
+#' fiscal period labels. The result is assigned class
+#' \code{fiscal_period_class}.
 #'
 #' @details
 #' Detection follows a greedy strategy, always preferring the finest
@@ -330,7 +330,7 @@ financial_year <- function(x){
 #' \enumerate{
 #'   \item Month detection is applied to all elements.
 #'   \item Quarter detection is applied only to unresolved elements.
-#'   \item Financial year detection is applied last (if enabled).
+#'   \item fiscal year detection is applied last (if enabled).
 #' }
 #'
 #' This ensures consistent frequency preference across mixed inputs.
@@ -343,10 +343,10 @@ financial_year <- function(x){
 #'   "invalid"
 #' )
 #'
-#' as_financial_period(x)
+#' as_fiscal_period(x)
 #'
 #' @export
-as_financial_period <- function(x, with_year = TRUE) {
+as_fiscal_period <- function(x, with_year = TRUE) {
 
   if (!is.character(x)) {
     stop("Input must be a character vector.", call. = FALSE)
@@ -356,13 +356,13 @@ as_financial_period <- function(x, with_year = TRUE) {
   out <- rep(NA_character_, n)
 
   # Try month first (finest granularity)
-  month_result <- financial_month_for_txt(x, with_year = with_year)
+  month_result <- fiscal_month_for_txt(x, with_year = with_year)
   out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
 
   # Try quarter if month failed
   still_na <- is.na(out)
   if (any(still_na)) {
-    quarter_result <- financial_quarter_for_txt(x[still_na], with_year = with_year)
+    quarter_result <- fiscal_quarter_for_txt(x[still_na], with_year = with_year)
     out[still_na] <- ifelse(!is.na(quarter_result), quarter_result, out[still_na])
   }
 
@@ -373,18 +373,18 @@ as_financial_period <- function(x, with_year = TRUE) {
     out[still_na] <- ifelse(!is.na(year_result), year_result, out[still_na])
   }
 
-  class(out) <- financial_period_class
+  class(out) <- fiscal_period_class
   out
 }
 
 
 
-#' Extract frequency from financial periods
+#' Extract frequency from fiscal periods
 #'
 #' Determines the temporal frequency of each element in a
-#' \code{financial_period} object based on its textual format.
+#' \code{fiscal_period} object based on its textual format.
 #'
-#' @param x A character vector of class \code{financial_period}.
+#' @param x A character vector of class \code{fiscal_period}.
 #' @param singular Logical. If \code{TRUE}, returns a single frequency label if
 #'  all elements share the same frequency, or "mixed" if they differ. Default
 #'  is \code{FALSE} to return individual frequencies.
@@ -394,7 +394,7 @@ as_financial_period <- function(x, with_year = TRUE) {
 #' \code{"month"}, \code{"quarter"}, \code{"year"}, or \code{NA}.
 #'
 #' @export
-frequency.financial_period <- function(x, singular = FALSE) {
+frequency.fiscal_period <- function(x, singular = FALSE) {
 
   n <- length(x)
   out <- rep(NA_character_, n)
@@ -473,33 +473,33 @@ frequency.calendar_period <- function(x, singular = FALSE) {
 
 
 
-#' Coerce financial_period to Date
+#' Coerce fiscal_period to Date
 #'
-#' Converts a \code{financial_period} object to a Date using
+#' Converts a \code{fiscal_period} object to a Date using
 #' the specified anchor.
 #'
-#' @param x A character vector of class \code{financial_period}.
+#' @param x A character vector of class \code{fiscal_period}.
 #' @param anchor One of "first", "mid", or "last".
 #' @param ... Unused.
 #'
 #' @return A Date vector of the same length as \code{x}.
 #'
 #' @export
-as.Date.financial_period <- function(
+as.Date.fiscal_period <- function(
     x,
     anchor = c("last", "first", "mid"),
     ...) {
 
   anchor <- match.arg(anchor)
 
-  fq <- frequency.financial_period(x)
+  fq <- frequency.fiscal_period(x)
 
   out <- rep(as.Date(NA), length(x))
 
   # month
   is_month <- fq == "month"
   if (any(is_month)) {
-    out[is_month] <- financial_month_to_date(
+    out[is_month] <- fiscal_month_to_date(
       x[is_month],
       anchor = anchor
     )
@@ -508,7 +508,7 @@ as.Date.financial_period <- function(
   # quarter
   is_quarter <- fq == "quarter"
   if (any(is_quarter)) {
-    out[is_quarter] <- financial_quarter_to_date(
+    out[is_quarter] <- fiscal_quarter_to_date(
       x[is_quarter],
       anchor = anchor
     )
@@ -517,7 +517,7 @@ as.Date.financial_period <- function(
   # year
   is_year <- fq == "year"
   if (any(is_year)) {
-    out[is_year] <- financial_year_to_date(
+    out[is_year] <- fiscal_year_to_date(
       x[is_year],
       anchor = anchor
     )
@@ -551,10 +551,10 @@ as.Date.calendar_period <- function(
 
   out <- rep(as.Date(NA), length(x))
 
-  ## month: reuse financial_month_to_date (grammar identical)
+  ## month: reuse fiscal_month_to_date (grammar identical)
   is_month <- fq == "month"
   if (any(is_month)) {
-    out[is_month] <- financial_month_to_date(
+    out[is_month] <- fiscal_month_to_date(
       x[is_month],
       anchor = anchor
     )
@@ -592,7 +592,7 @@ as.Date.calendar_period <- function(
 #' Previous period conversion
 #'
 #' Returns the immediately preceding period of the same frequency for each
-#' element of a financial or calendar period vector.
+#' element of a fiscal or calendar period vector.
 #'
 #' For example:
 #' \itemize{
@@ -603,10 +603,10 @@ as.Date.calendar_period <- function(
 #'
 #' The function is an S3-style dispatcher and selects the appropriate internal
 #' method based on the class of \code{x}. Supported classes are
-#' \code{financial_period} and \code{calendar_period}. Supplying any other
+#' \code{fiscal_period} and \code{calendar_period}. Supplying any other
 #' input will result in an error.
 #'
-#' @param x A character vector of class \code{financial_period} or
+#' @param x A character vector of class \code{fiscal_period} or
 #'   \code{calendar_period}.
 #'
 #' @return
@@ -614,12 +614,12 @@ as.Date.calendar_period <- function(
 #' immediately preceding periods.
 #'
 #' @examples
-#' # Monthly financial periods
-#' x <- as_financial_period(c("Jan:2014", "Feb:2014", "Mar:2014"))
+#' # Monthly fiscal periods
+#' x <- as_fiscal_period(c("Jan:2014", "Feb:2014", "Mar:2014"))
 #' previous_period(x)
 #'
-#' # Quarterly financial periods
-#' q <- as_financial_period(c("Q1:2024-25", "Q2:2024-25"))
+#' # Quarterly fiscal periods
+#' q <- as_fiscal_period(c("Q1:2024-25", "Q2:2024-25"))
 #' previous_period(q)
 #'
 #' # Calendar periods
@@ -628,12 +628,12 @@ as.Date.calendar_period <- function(
 #'
 #' @export
 previous_period <- function(x) {
-  if(inherits(x, financial_period_class)){
-    res <- previous_period_for_financial_period(x)
+  if(inherits(x, fiscal_period_class)){
+    res <- previous_period_for_fiscal_period(x)
   } else if (inherits(x, calendar_period_class)) {
     res <- previous_period_for_calendar_period(x)
   } else {
-    stop("Input must be either a financial_period or calendar_period vector.", call. = FALSE)
+    stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)
   }
   res
 }
@@ -642,7 +642,7 @@ previous_period <- function(x) {
 #' Previous year conversion
 #'
 #' Returns the period corresponding to the same frequency in the previous year
-#' for each element of a financial or calendar period vector.
+#' for each element of a fiscal or calendar period vector.
 #'
 #' Unlike \code{\link{previous_period}}, which moves back by one period unit
 #' (for example, one month or one quarter), \code{previous_year} moves back
@@ -659,7 +659,7 @@ previous_period <- function(x) {
 #' representation by a one-year lag (365 days) and re-mapping it back to the
 #' appropriate period format.
 #'
-#' @param x A character vector of class \code{financial_period} or
+#' @param x A character vector of class \code{fiscal_period} or
 #'   \code{calendar_period}.
 #'
 #' @return
@@ -667,12 +667,12 @@ previous_period <- function(x) {
 #' corresponding periods from the previous year.
 #'
 #' @examples
-#' # Monthly financial periods
-#' x <- as_financial_period(c("Jan:2014", "Feb:2014"))
+#' # Monthly fiscal periods
+#' x <- as_fiscal_period(c("Jan:2014", "Feb:2014"))
 #' previous_year(x)
 #'
-#' # Quarterly financial periods
-#' q <- as_financial_period("Q3:2024-25")
+#' # Quarterly fiscal periods
+#' q <- as_fiscal_period("Q3:2024-25")
 #' previous_year(q)
 #'
 #' # Calendar years
@@ -684,12 +684,12 @@ previous_period <- function(x) {
 #'
 #' @export
 previous_year <- function(x) {
-  if(inherits(x, financial_period_class)){
-    res <- previous_period_for_financial_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
+  if(inherits(x, fiscal_period_class)){
+    res <- previous_period_for_fiscal_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
   } else if (inherits(x, calendar_period_class)) {
     res <- previous_period_for_calendar_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
   } else {
-    stop("Input must be either a financial_period or calendar_period vector.", call. = FALSE)
+    stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)
   }
   res
 }

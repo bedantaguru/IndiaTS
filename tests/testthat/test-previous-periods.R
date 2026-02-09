@@ -1,7 +1,7 @@
 
-test_that("previous_period works for monthly financial periods", {
+test_that("previous_period works for monthly fiscal periods", {
 
-  x <- as_financial_period(c("jan 14", "feb 14", "march 14"))
+  x <- as_fiscal_period(c("jan 14", "feb 14", "march 14"))
 
   result <- previous_period(x)
 
@@ -13,18 +13,18 @@ test_that("previous_period works for monthly financial periods", {
 
 
 
-test_that("previous_period and previous_year work for mixed financial frequencies", {
+test_that("previous_period and previous_year work for mixed fiscal frequencies", {
 
   raw <- c(
-    "Q1 FY26",      # financial quarter
-    "Q2 2022-23",   # financial quarter
-    "Jan 2014",     # financial month
-    "Jul 1988"      # financial month
+    "Q1 FY26",      # fiscal quarter
+    "Q2 2022-23",   # fiscal quarter
+    "Jan 2014",     # fiscal month
+    "Jul 1988"      # fiscal month
   )
 
-  x <- as_financial_period(raw)
+  x <- as_fiscal_period(raw)
 
-  expect_s3_class(x, financial_period_class)
+  expect_s3_class(x, fiscal_period_class)
   expect_length(x, length(raw))
 
   ## previous period (adjacent)
@@ -60,7 +60,7 @@ test_that("previous_period and previous_year work for mixed financial frequencie
 
 
 
-test_that("all supported financial year string formats convert correctly", {
+test_that("all supported fiscal year string formats convert correctly", {
 
   raw <- c(
     "jan 14",
@@ -71,10 +71,10 @@ test_that("all supported financial year string formats convert correctly", {
     "Jan-14"
   )
 
-  x <- as_financial_period(raw)
+  x <- as_fiscal_period(raw)
 
   ## sanity
-  expect_s3_class(x, financial_period_class)
+  expect_s3_class(x, fiscal_period_class)
   expect_length(x, length(raw))
 
   ## previous period must work uniformly
@@ -95,7 +95,7 @@ test_that("all supported financial year string formats convert correctly", {
 
 
 
-test_that("all supported financial quarter formats convert correctly", {
+test_that("all supported fiscal quarter formats convert correctly", {
 
   raw <- c(
     "Q1 FY26",
@@ -105,9 +105,9 @@ test_that("all supported financial quarter formats convert correctly", {
     "Q1:FY26"
   )
 
-  x <- as_financial_period(raw)
+  x <- as_fiscal_period(raw)
 
-  expect_s3_class(x, financial_period_class)
+  expect_s3_class(x, fiscal_period_class)
 
   result <- previous_period(x)
 
@@ -124,7 +124,7 @@ test_that("all supported financial quarter formats convert correctly", {
 })
 
 
-test_that("financial year parsing works for FYxx, FYxxxx and YYYY-YY formats", {
+test_that("fiscal year parsing works for FYxx, FYxxxx and YYYY-YY formats", {
 
   raw <- c(
     "FY14",
@@ -137,13 +137,13 @@ test_that("financial year parsing works for FYxx, FYxxxx and YYYY-YY formats", {
     "1986-87"
   )
 
-  x <- as_financial_period(raw)
+  x <- as_fiscal_period(raw)
 
   ## sanity
-  expect_s3_class(x, financial_period_class)
+  expect_s3_class(x, fiscal_period_class)
   expect_length(x, length(raw))
 
-  ## previous financial year
+  ## previous fiscal year
   result <- previous_period(x)
 
   expect_equal(
