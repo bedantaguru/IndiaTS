@@ -19,7 +19,10 @@ test_that("previous_period and previous_year work for mixed fiscal frequencies",
     "Q1 FY26",      # fiscal quarter
     "Q2 2022-23",   # fiscal quarter
     "Jan 2014",     # fiscal month
-    "Jul 1988"      # fiscal month
+    "Jul 1988",      # fiscal month
+    "2012-13",         # fiscal year (FY2013)
+    "H1 2020-21",         # fiscal half (H1 FY2021)
+    "H2 2020-21"          # fiscal half (H2 FY2021)
   )
 
   x <- as_fiscal_period(raw)
@@ -36,9 +39,13 @@ test_that("previous_period and previous_year work for mixed fiscal frequencies",
       "Q4:2024-25",  # Q1 FY26 -> previous FY Q4
       "Q1:2022-23",  # Q2 -> Q1
       "Dec:2013",    # Jan -> Dec
-      "Jun:1988"     # Jul -> Jun
+      "Jun:1988",     # Jul -> Jun
+      "2011-12",         # 2012-13 -> previous FY
+      "H2:2019-20",         # H1 2020-21 -> previous FY H2
+      "H1:2020-21"          # H2 2020-21 -> previous FY H1
     )
   )
+
 
   ## previous year (YoY, same frequency)
   prev_y <- previous_year(x)
@@ -46,10 +53,13 @@ test_that("previous_period and previous_year work for mixed fiscal frequencies",
   expect_equal(
     unclass(prev_y),
     c(
-      "Q1:2024-25",  # same quarter, previous FY
-      "Q2:2021-22",  # same quarter, previous FY
-      "Jan:2013",    # same month, previous year
-      "Jul:1987"     # same month, previous year
+      "Q1:2024-25",      # Q1 FY26 -> same Q1 previous FY
+      "Q2:2021-22",   # Q2 2022-23 -> same Q2 previous FY
+      "Jan:2013",     # Jan 2014 -> same month previous year
+      "Jul:1987",      # Jul 1988 -> same month previous year
+      "2011-12",         # 2012-13 -> previous FY
+      "H1:2019-20",         # H1 2020-21 -> same half previous FY
+      "H2:2019-20"          # H2 2020-21 -> same half previous FY
     )
   )
 
@@ -202,3 +212,27 @@ test_that("previous_period and previous_year work for calendar quarters", {
   )
 })
 
+test_that("fiscal year parsing works for XX-XX format", {
+
+  raw <- c(
+    "14-15",
+    "86-87"
+  )
+
+  x <- as_fiscal_period(raw)
+
+  ## sanity
+  expect_s3_class(x, fiscal_period_class)
+  expect_length(x, length(raw))
+
+  ## previous fiscal year
+  result <- previous_period(x)
+
+  expect_equal(
+    unclass(result),
+    c(
+      "2013-14",  # 14-15 -> previous FY
+      "1985-86"   # 86-87 -> previous FY
+    )
+  )
+})

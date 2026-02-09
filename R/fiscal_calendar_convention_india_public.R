@@ -348,33 +348,17 @@ fiscal_year <- function(x){
 #' @export
 as_fiscal_period <- function(x, with_year = TRUE) {
 
-  if (!is.character(x)) {
-    stop("Input must be a character vector.", call. = FALSE)
+  if(is_date_type(x)){
+    res <- as_fiscal_period_for_date(as.Date(x), with_year = with_year)
+  } else {
+    if(is.character(x)){
+      res <- as_fiscal_period_for_txt(x, with_year = with_year)
+    } else {
+      stop("Input must be either a date or character vector.", call. = FALSE)
+    }
   }
-
-  n <- length(x)
-  out <- rep(NA_character_, n)
-
-  # Try month first (finest granularity)
-  month_result <- fiscal_month_for_txt(x, with_year = with_year)
-  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
-
-  # Try quarter if month failed
-  still_na <- is.na(out)
-  if (any(still_na)) {
-    quarter_result <- fiscal_quarter_for_txt(x[still_na], with_year = with_year)
-    out[still_na] <- ifelse(!is.na(quarter_result), quarter_result, out[still_na])
-  }
-
-  # Try year if both month and quarter failed
-  still_na <- is.na(out)
-  if (any(still_na) && with_year) {
-    year_result <- extract_fy(x[still_na])
-    out[still_na] <- ifelse(!is.na(year_result), year_result, out[still_na])
-  }
-
-  class(out) <- fiscal_period_class
-  out
+  class(res) <- fiscal_period_class
+  res
 }
 
 
@@ -407,23 +391,24 @@ frequency.fiscal_period <- function(x, singular = FALSE) {
   is_quarter <- grepl("^Q[1-4]:\\d{4}-\\d{2}$", x)
   out[is_quarter] <- "quarter"
 
+  # Half-year: H1:YYYY-YY or H2:YYYY-YY
+  is_halfyear <- grepl("^H[12]:\\d{4}-\\d{2}$", x)
+  out[is_halfyear] <- "halfyear"
+
   # Year: YYYY-YY
   is_year <- grepl("^\\d{4}-\\d{2}$", x)
   out[is_year] <- "year"
 
-
-  if(singular){
-    # If singular is TRUE, convert to singular form (month -> month, quarter -> quarter, year -> year) (if all are same) otherwise "mixed"
+  if (singular) {
     unique_freq <- unique(na.omit(out))
-    if(length(unique_freq) == 1){
+    if (length(unique_freq) == 1) {
       return(unique_freq)
     } else {
       return("mixed")
     }
   }
 
-  return(out)
-
+  out
 }
 
 
@@ -472,6 +457,149 @@ frequency.calendar_period <- function(x, singular = FALSE) {
 }
 
 
+#' Detect Frequency Pattern in Date Vectors
+#'
+#' Automatically detects the temporal frequency of a Date vector by analyzing
+#' the intervals between consecutive dates. Uses the median interval and
+#' coefficient of variation to classify the frequency pattern.
+#'
+#' @param x A vector of Date objects to analyze
+#' @param ... Additional arguments (currently unused, for S3 method compatibility)
+#'
+#' @return A character string indicating the detected frequency:
+#' \describe{
+#'   \item{\code{"day"}}{Daily data (1-2 day intervals)}
+#'   \item{\code{"week"}}{Weekly data (6-8 day intervals)}
+#'   \item{\code{"biweek"}}{Bi-weekly data (13-16 day intervals)}
+#'   \item{\code{"month"}}{Monthly data (25-35 day intervals)}
+#'   \item{\code{"bimonth"}}{Bi-monthly data (60-67 day intervals)}
+#'   \item{\code{"quarter"}}{Quarterly data (85-95 day intervals)}
+#'   \item{\code{"halfyear"}}{Half-yearly data (175-190 day intervals)}
+#'   \item{\code{"year"}}{Annual data (350-380 day intervals)}
+#'   \item{\code{"mixed"}}{Irregular or mixed frequency (CV > 0.3)}
+#'   \item{\code{NA_character_}}{Unable to determine (insufficient data or no clear pattern)}
+#' }
+#'
+#' @details
+#' The function works by:
+#' \enumerate{
+#'   \item Removing NA values and sorting dates
+#'   \item Calculating differences between consecutive dates
+#'   \item Computing the median interval (robust to outliers)
+#'   \item Checking coefficient of variation (CV = SD/mean) to detect irregular patterns
+#'   \item Classifying into standard frequency categories
+#' }
+#'
+#' A CV threshold of 0.3 (30\%) is used to identify mixed/irregular frequencies.
+#' The classification ranges are intentionally wide to accommodate real-world
+#' variations such as weekends, holidays, month-end adjustments, and leap years.
+#'
+#' @section Edge Cases:
+#' \itemize{
+#'   \item Empty vectors or vectors with only NA values return \code{NA_character_}
+#'   \item Single date observations return \code{NA_character_} (frequency cannot be determined)
+#'   \item All identical dates return \code{NA_character_}
+#'   \item Highly variable intervals (CV > 0.3) return \code{"mixed"}
+#' }
+#'
+#' @examples
+#' # Monthly data
+#' monthly_dates <- seq.Date(as.Date("2020-01-01"), by = "month", length.out = 12)
+#' frequency.Date(monthly_dates)
+#' # Returns: "month"
+#'
+#' # Quarterly data
+#' quarterly_dates <- seq.Date(as.Date("2020-01-01"), by = "quarter", length.out = 8)
+#' frequency.Date(quarterly_dates)
+#' # Returns: "quarter"
+#'
+#' # Annual data
+#' yearly_dates <- seq.Date(as.Date("2015-01-01"), by = "year", length.out = 10)
+#' frequency.Date(yearly_dates)
+#' # Returns: "year"
+#'
+#' # Mixed/irregular frequency
+#' mixed_dates <- c(
+#'   as.Date("2020-01-01"),
+#'   as.Date("2020-02-01"),
+#'   as.Date("2020-05-01"),
+#'   as.Date("2021-01-01")
+#' )
+#' frequency.Date(mixed_dates)
+#' # Returns: "mixed"
+#'
+#' # Edge case: single observation
+#' frequency.Date(as.Date("2020-01-01"))
+#' # Returns: NA_character_
+#'
+#' # Edge case: with NA values (automatically removed)
+#' dates_with_na <- c(as.Date("2020-01-01"), NA, as.Date("2020-02-01"),
+#'                    as.Date("2020-03-01"), NA)
+#' frequency.Date(dates_with_na)
+#' # Returns: "month"
+#'
+#' @seealso \code{\link{diff}}, \code{\link{seq.Date}}
+#'
+#' @export
+frequency.Date <- function(x, ...) {
+  # Remove NA values
+  x_cl <- x[!is.na(x)]
+
+  # Handle edge cases
+  if (length(x_cl) == 0) {
+    return(NA_character_)
+  }
+
+  if (length(x_cl) == 1) {
+    return(NA_character_)  # Can't determine frequency with single observation
+  }
+
+  # Sort and calculate differences
+  freq_chk <- x_cl %>% sort() %>% diff() %>% as.numeric()
+
+  # Handle case where all dates are identical
+  if (all(freq_chk == 0)) {
+    return(NA_character_)
+  }
+
+  # Check for mixed frequency (only if we have 3+ observations)
+  # With only 2 observations (1 difference), we can't assess variability
+  if (length(freq_chk) > 1) {
+    sd_chk <- sd(freq_chk)
+    mean_chk <- mean(freq_chk)
+    cv <- sd_chk / mean_chk
+
+    if (cv > 0.3) {  # 30% coefficient of variation threshold
+      return("mixed")
+    }
+  }
+
+  # Use median for classification (more robust to outliers)
+  primary_metric <- median(freq_chk)
+
+  # Classify frequency based on median interval
+  # Using wider ranges to account for real-world variations
+  # (weekends, holidays, month-end variations, leap years)
+  if (primary_metric >= 1 && primary_metric <= 2) {
+    return("day")
+  } else if (primary_metric >= 6 && primary_metric <= 8) {
+    return("week")
+  } else if (primary_metric >= 13 && primary_metric <= 16) {
+    return("biweek")
+  } else if (primary_metric >= 25 && primary_metric <= 35) {
+    return("month")
+  } else if (primary_metric >= 60 && primary_metric <= 67) {
+    return("bimonth")
+  } else if (primary_metric >= 85 && primary_metric <= 95) {
+    return("quarter")
+  } else if (primary_metric >= 175 && primary_metric <= 190) {
+    return("halfyear")
+  } else if (primary_metric >= 350 && primary_metric <= 380) {
+    return("year")
+  } else {
+    return(NA_character_)
+  }
+}
 
 #' Coerce fiscal_period to Date
 #'
@@ -514,6 +642,15 @@ as.Date.fiscal_period <- function(
     )
   }
 
+  # half-year
+  is_halfyear <- fq == "halfyear"
+  if (any(is_halfyear)) {
+    out[is_halfyear] <- fiscal_halfyear_to_date(
+      x[is_halfyear],
+      anchor = anchor
+    )
+  }
+
   # year
   is_year <- fq == "year"
   if (any(is_year)) {
@@ -525,6 +662,7 @@ as.Date.fiscal_period <- function(
 
   out
 }
+
 
 
 #' Coerce calendar_period to Date
@@ -685,7 +823,7 @@ previous_period <- function(x) {
 #' @export
 previous_year <- function(x) {
   if(inherits(x, fiscal_period_class)){
-    res <- previous_period_for_fiscal_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
+    res <- previous_period_for_fiscal_period(x, lag_len = c("month" = 365, "quarter" = 365, "halfyear" = 365, "year" = 365))
   } else if (inherits(x, calendar_period_class)) {
     res <- previous_period_for_calendar_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
   } else {

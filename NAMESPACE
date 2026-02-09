@@ -2,6 +2,7 @@
 
 S3method(as.Date,calendar_period)
 S3method(as.Date,fiscal_period)
+S3method(frequency,Date)
 S3method(frequency,calendar_period)
 S3method(frequency,fiscal_period)
 S3method(print,calendar_period)

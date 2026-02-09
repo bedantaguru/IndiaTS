@@ -181,6 +181,39 @@ fiscal_month_for_txt <- function(txt, with_year = TRUE) {
 }
 
 
+extract_fy_halfyear_only <- function(x) {
+  # regex patterns (case-insensitive)
+
+  # H1: April-September
+  pat_h1 <- stringr::regex(
+    paste0(
+      "\\b(",
+      "h1|1h|half\\s*1|first\\s*half|",
+      "apr(?:il)?\\s*(?:-|–|to|_|\\s)\\s*sep(?:t(?:ember)?)?",
+      ")\\b"
+    ),
+    ignore_case = TRUE
+  )
+
+  # H2: October-March
+  pat_h2 <- stringr::regex(
+    paste0(
+      "\\b(",
+      "h2|2h|half\\s*2|second\\s*half|",
+      "oct(?:ober)?\\s*(?:-|–|to|_|\\s)\\s*mar(?:ch)?",
+      ")\\b"
+    ),
+    ignore_case = TRUE
+  )
+
+  # extract first matching half-year
+  out <- rep(NA_character_, length(x))
+  out[stringr::str_detect(x, pat_h1) & is.na(out)] <- "h1"
+  out[stringr::str_detect(x, pat_h2) & is.na(out)] <- "h2"
+
+  out
+}
+
 
 extract_calendar_quarter_only <- function(x) {
 
@@ -452,6 +485,88 @@ extract_fy_quarter <- function(x) {
   out
 }
 
+extract_fy_halfyear <- function(x){
+  # extract components
+  hy <- extract_fy_halfyear_only(x)
+  fy <- extract_fy(x)
+
+  # initialise output
+  out <- rep(NA_character_, length(x))
+
+  # only when BOTH half-year and FY are present
+  both <- !is.na(hy) & !is.na(fy)
+  out[both] <- paste0(toupper(hy[both]), ":", fy[both])
+
+  out
+}
+
+fiscal_halfyear_for_date <- function(date, with_year = TRUE) {
+
+  mon <- lubridate::month(date)
+
+  hy <- dplyr::case_when(
+    mon %in% 4:9   ~ "H1",
+    mon %in% c(10,11,12,1,2,3) ~ "H2"
+  )
+
+  if (with_year) {
+    res <- paste0(hy, ":", fiscal_year(date))
+  } else {
+    res <- hy
+  }
+
+  res <- ifelse(is.na(date), NA_character_, res)
+  res
+}
+
+fiscal_halfyear_for_txt <- function(txt, with_year = TRUE) {
+  if(with_year){
+    extract_fy_halfyear(txt)
+  } else {
+    extract_fy_halfyear_only(txt)
+  }
+}
+
+fiscal_halfyear_to_date <- function(x, anchor = c("mid", "first", "last")) {
+  anchor <- match.arg(anchor)
+  out <- rep(as.Date(NA), length(x))
+
+  # strict pattern: H1/H2:YYYY-YY
+  pat <- "^(H[12]):(\\d{4}-\\d{2})$"
+  m <- stringr::str_match(x, pat)
+  valid <- !is.na(m[, 1])
+
+  if (!any(valid)) return(out)
+
+  hy   <- m[valid, 2]
+  fy   <- m[valid, 3]
+  idx <- which(valid)
+
+  # extract base year from FY
+  base_year <- as.integer(substr(fy, 1, 4))
+
+  # compute start and end dates for each half-year
+  for (i in seq_along(idx)) {
+    if (hy[i] == "H1") {
+      # H1: April to September of base year
+      start_date <- as.Date(sprintf("%04d-04-01", base_year[i]))
+      end_date   <- as.Date(sprintf("%04d-09-30", base_year[i]))
+    } else {
+      # H2: October of base year to March of next year
+      start_date <- as.Date(sprintf("%04d-10-01", base_year[i]))
+      end_date   <- as.Date(sprintf("%04d-03-31", base_year[i] + 1L))
+    }
+
+    out[idx[i]] <- switch(
+      anchor,
+      first = start_date,
+      last  = end_date,
+      mid   = start_date + as.integer((end_date - start_date) / 2)
+    )
+  }
+
+  out
+}
 
 calendar_quarter_to_date <- function(x, anchor = c("mid", "first", "last")) {
 
@@ -692,7 +807,15 @@ fiscal_year_for_date <- function(date) {
 
 
 
-previous_period_for_fiscal_period <- function(fp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
+previous_period_for_fiscal_period <- function(
+    fp,
+    lag_len = c(
+      "month" = 30,
+      "quarter" = 90,
+      "halfyear" = 182,
+      "year" = 365
+    )
+) {
 
   fp_date <- as.Date.fiscal_period(fp, anchor = "mid")
 
@@ -701,6 +824,7 @@ previous_period_for_fiscal_period <- function(fp, lag_len = c("month" = 30, "qua
   days_to_subtract <- dplyr::case_when(
     fqs == "month" ~ as.numeric(lag_len["month"]),
     fqs == "quarter" ~ as.numeric(lag_len["quarter"]),
+    fqs == "halfyear" ~ as.numeric(lag_len["halfyear"]),
     fqs == "year" ~ as.numeric(lag_len["year"]),
     TRUE ~ NA_real_
   )
@@ -710,6 +834,7 @@ previous_period_for_fiscal_period <- function(fp, lag_len = c("month" = 30, "qua
   out <- dplyr::case_when(
     fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
     fqs == "quarter" ~ fiscal_quarter_for_date(this_dates, with_year = TRUE),
+    fqs == "halfyear" ~ fiscal_halfyear_for_date(this_dates, with_year = TRUE),
     fqs == "year" ~ fiscal_year_for_date(this_dates),
     TRUE ~ NA
   )
@@ -717,7 +842,6 @@ previous_period_for_fiscal_period <- function(fp, lag_len = c("month" = 30, "qua
   class(out) <- class(fp)  # preserve class of input
 
   out
-
 }
 
 previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
@@ -746,5 +870,74 @@ previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "q
 
   out
 
+}
+
+
+
+
+
+as_fiscal_period_for_txt <- function(x, with_year = TRUE) {
+
+  n <- length(x)
+  out <- rep(NA_character_, n)
+
+  # 1. Month (finest granularity)
+  month_result <- fiscal_month_for_txt(x, with_year = with_year)
+  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
+
+  # 2. Quarter
+  still_na <- is.na(out)
+  if (any(still_na)) {
+    quarter_result <- fiscal_quarter_for_txt(x[still_na], with_year = with_year)
+    out[still_na] <- ifelse(!is.na(quarter_result), quarter_result, out[still_na])
+  }
+
+  # 3. Half-year
+  still_na <- is.na(out)
+  if (any(still_na)) {
+    halfyear_result <- fiscal_halfyear_for_txt(x[still_na], with_year = with_year)
+    out[still_na] <- ifelse(!is.na(halfyear_result), halfyear_result, out[still_na])
+  }
+
+  # 4. Year (coarsest)
+  still_na <- is.na(out)
+  if (any(still_na) && with_year) {
+    year_result <- extract_fy(x[still_na])
+    out[still_na] <- ifelse(!is.na(year_result), year_result, out[still_na])
+  }
+
+  class(out) <- fiscal_period_class
+  out
+}
+
+
+as_fiscal_period_for_date <- function(x, with_year = TRUE) {
+
+  fq <- frequency.Date(x)
+
+  if(is.na(fq)){
+    stop("Unable to determine frequency of input dates. Please ensure they are regular.", call. = FALSE)
+  }
+
+  if(fq == "mixed"){
+    stop("Input dates have mixed frequencies. Please ensure they are regular.", call. = FALSE)
+  }
+
+  if(!(fq %in% c("month", "quarter", "halfyear", "year"))){
+    stop("Unsupported frequency detected: ", fq, ". Supported frequencies are: month, quarter, halfyear, year.", call. = FALSE)
+  }
+
+  # Proceed for other cases (month, quarter, halfyear, year)
+  if(fq %in% c("month", "quarter", "halfyear", "year")){
+    out <- dplyr::case_when(
+      fq == "month" ~ fiscal_month_for_date(x, with_year = with_year),
+      fq == "quarter" ~ fiscal_quarter_for_date(x, with_year = with_year),
+      fq == "halfyear" ~ fiscal_halfyear_for_date(x, with_year = with_year),
+      fq == "year" ~ fiscal_year_for_date(x),
+      TRUE ~ NA_character_
+    )
+    return(out)
+  }
+  return(NULL)
 }
 
