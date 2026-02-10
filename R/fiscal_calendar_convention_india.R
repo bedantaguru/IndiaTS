@@ -941,3 +941,129 @@ as_fiscal_period_for_date <- function(x, with_year = TRUE) {
   return(NULL)
 }
 
+as_fiscal_period_for_calendar_period <- function(x, with_year = TRUE) {
+
+  n <- length(x)
+  out <- rep(NA_character_, n)
+
+  fqs <- frequency.calendar_period(x)
+
+  if(any(!(fqs %in% c("month", "quarter")))){
+    stop("Input calendar periods contain frequencies other than month and quarter. Please check these cases manually.", call. = FALSE)
+  }
+
+  ## 1. Month (finest granularity)
+  month_result <- fiscal_month_for_txt(x, with_year = with_year)
+  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
+
+  ## 2. Quarter
+  still_na <- is.na(out)
+  if (any(still_na)) {
+    quarter_result <- fiscal_quarter(x[still_na], with_year = with_year, auto_convert_calendar_quarter = TRUE)
+    out[still_na] <- ifelse(
+      !is.na(quarter_result),
+      quarter_result,
+      out[still_na]
+    )
+  }
+
+  class(out) <- fiscal_period_class
+  out
+}
+
+
+as_calendar_period_for_txt <- function(x, with_year = TRUE) {
+
+  n <- length(x)
+  out <- rep(NA_character_, n)
+
+  ## 1. Month (finest granularity)
+  month_result <- fiscal_month_for_txt(x, with_year = with_year)
+  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
+
+  ## 2. Quarter
+  still_na <- is.na(out)
+  if (any(still_na)) {
+    quarter_result <- calendar_quarter_for_txt(x[still_na], with_year = with_year)
+    out[still_na] <- ifelse(
+      !is.na(quarter_result),
+      quarter_result,
+      out[still_na]
+    )
+  }
+
+  ## 3. Year (coarsest)
+  still_na <- is.na(out)
+  if (any(still_na) && with_year) {
+    year_result <- extract_calendar_year(x[still_na])
+    out[still_na] <- ifelse(
+      !is.na(year_result),
+      as.character(year_result),
+      out[still_na]
+    )
+  }
+
+  class(out) <- calendar_period_class
+  out
+}
+
+
+as_calendar_period_for_date <- function(x, with_year = TRUE) {
+
+  fq <- frequency.Date(x)
+
+  if(is.na(fq)){
+    stop("Unable to determine frequency of input dates. Please ensure they are regular.", call. = FALSE)
+  }
+
+  if(fq == "mixed"){
+    stop("Input dates have mixed frequencies. Please ensure they are regular.", call. = FALSE)
+  }
+
+  if(!(fq %in% c("month", "quarter", "year"))){
+    stop("Unsupported frequency detected: ", fq, ". Supported frequencies are: month, quarter, year.", call. = FALSE)
+  }
+
+  # Proceed for other cases (month, quarter, year)
+  if(fq %in% c("month", "quarter", "year")){
+    out <- dplyr::case_when(
+      fq == "month" ~ fiscal_month_for_date(x, with_year = with_year),
+      fq == "quarter" ~ calendar_quarter_for_date(x, with_year = with_year),
+      fq == "year" ~ as.character(lubridate::year(x)),
+      TRUE ~ NA_character_
+    )
+    return(out)
+  }
+  return(NULL)
+}
+
+
+as_calendar_period_for_fiscal_period <- function(x, with_year = TRUE) {
+
+  n <- length(x)
+  out <- rep(NA_character_, n)
+
+  fqs <- frequency.fiscal_period(x)
+
+  if(any(!(fqs %in% c("month", "quarter")))){
+    stop("Input fiscal periods contain unsupported frequencies. Please check these cases manually.", call. = FALSE)
+  }
+
+  ## 1. Month (finest granularity)
+  month_result <- fiscal_month_for_txt(x, with_year = with_year)
+  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
+
+  ## 2. Quarter
+  still_na <- is.na(out)
+  if (any(still_na)) {
+    quarter_result <- calendar_quarter(x[still_na], with_year = with_year, auto_convert_fiscal_quarter = TRUE)
+    out[still_na] <- ifelse(
+      !is.na(quarter_result),
+      quarter_result,
+      out[still_na]
+    )
+  }
+
+  class(out) <- calendar_period_class
+  out
+}

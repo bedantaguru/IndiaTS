@@ -129,3 +129,133 @@ test_that("date-based quarter coercions are idempotent", {
 
   expect_equal(back, cal)
 })
+
+
+
+test_that("calendar -> fiscal -> calendar roundtrip is stable for text input", {
+
+  x <- c(
+    "Jan 2023",
+    "Feb 2024",
+    "Q1 2023",
+    "Q4 2022"
+  )
+
+  cal1 <- as_calendar_period(x, with_year = TRUE)
+  fis  <- as_fiscal_period(cal1, with_year = TRUE)
+  cal2 <- as_calendar_period(fis, with_year = TRUE)
+
+  expect_s3_class(cal1, calendar_period_class)
+  expect_s3_class(fis, fiscal_period_class)
+  expect_s3_class(cal2, calendar_period_class)
+
+  expect_identical(as.character(cal2), as.character(cal1))
+})
+
+
+test_that("fiscal mapping preserves correct calendar meaning", {
+
+  x <- c("Jan 2023", "Apr 2023", "Q1 2023", "Q4 2023")
+
+  cal <- as_calendar_period(x, with_year = TRUE)
+  fis <- as_fiscal_period(cal, with_year = TRUE)
+
+  ## month checks
+  expect_equal(
+    as.character(fis[1]),
+    "Jan:2023"
+  )
+
+  expect_equal(
+    as.character(fis[2]),
+    "Apr:2023"
+  )
+
+  ## quarter checks
+  expect_equal(
+    as.character(fis[3]),
+    "Q4:2022-23"  # Q1 calendar falls in fiscal Q4
+  )
+
+  expect_equal(
+    as.character(fis[4]),
+    "Q3:2023-24"
+  )
+})
+
+test_that("as_calendar_period errors on mixed-frequency Date input", {
+
+  x <- as.Date(c(
+    "2023-01-15",  # month
+    "2023-06-30",  # month
+    "2023-10-01"   # quarter boundary
+  ))
+
+  expect_error(
+    as_calendar_period(x, with_year = TRUE),
+    "mixed frequencies",
+    ignore.case = TRUE
+  )
+})
+
+
+test_that("frequency is preserved across roundtrip", {
+
+  x <- as.Date(c(
+    "2023-04-01",
+    "2023-05-01"
+  ))
+
+  cal <- as_calendar_period(x)
+  fis <- as_fiscal_period(cal)
+
+  expect_identical(
+    frequency.calendar_period(cal),
+    frequency.fiscal_period(fis)
+  )
+})
+
+
+
+test_that("calendar -> fiscal -> calendar roundtrip works for monthly Date input", {
+
+  x <- as.Date(c(
+    "2023-01-15",
+    "2023-02-10",
+    "2023-03-20"
+  ))
+
+  cal1 <- as_calendar_period(x, with_year = TRUE)
+  fis  <- as_fiscal_period(cal1, with_year = TRUE)
+  cal2 <- as_calendar_period(fis, with_year = TRUE)
+
+  expect_identical(as.character(cal2), as.character(cal1))
+})
+
+
+test_that("calendar -> fiscal -> calendar roundtrip works for quarterly Date input", {
+
+  x <- as.Date(c(
+    "2023-01-10",
+    "2023-04-10",
+    "2023-07-10"
+  ))
+
+  cal1 <- as_calendar_period(x, with_year = TRUE)
+  fis  <- as_fiscal_period(cal1, with_year = TRUE)
+  cal2 <- as_calendar_period(fis, with_year = TRUE)
+
+  expect_identical(as.character(cal2), as.character(cal1))
+
+  expect_equal(
+    "q1 20" %>% as_calendar_period() %>% as.Date(),
+    as.Date("2020-03-31")
+  )
+
+  expect_equal(
+    "jan 85" %>% as_calendar_period() %>% as.Date(),
+    as.Date("1985-01-31")
+  )
+
+})
+

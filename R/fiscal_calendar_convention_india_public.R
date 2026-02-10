@@ -141,7 +141,7 @@ fiscal_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = 
   if(is_date_type(x)){
     res <- fiscal_quarter_for_date(as.Date(x), with_year = with_year)
   } else {
-    if (inherits(x , calendar_period_class)) {
+    if (inherits(x , calendar_period_class[1])) {
       res <- fiscal_quarter_for_date(calendar_quarter_to_date(x, anchor = "mid"))
     } else {
       if(is.character(x)){
@@ -187,7 +187,7 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_fiscal_quarter = 
 
   } else {
 
-    if (inherits(x, fiscal_period_class)) {
+    if (inherits(x, fiscal_period_class[1])) {
 
       res <- calendar_quarter_for_date(
         fiscal_quarter_to_date(x, anchor = "mid"),
@@ -351,16 +351,91 @@ as_fiscal_period <- function(x, with_year = TRUE) {
   if(is_date_type(x)){
     res <- as_fiscal_period_for_date(as.Date(x), with_year = with_year)
   } else {
-    if(is.character(x)){
-      res <- as_fiscal_period_for_txt(x, with_year = with_year)
+    if(inherits(x, calendar_period_class[1])){
+      res <- as_fiscal_period_for_calendar_period(x, with_year = with_year)
     } else {
-      stop("Input must be either a date or character vector.", call. = FALSE)
+      if(is.character(x)){
+        res <- as_fiscal_period_for_txt(x, with_year = with_year)
+      } else {
+        stop("Input must be a date, calendar_period, or character vector.", call. = FALSE)
+      }
     }
   }
   class(res) <- fiscal_period_class
   res
 }
 
+
+#' Coerce input to a calendar period
+#'
+#' Converts dates, fiscal periods, or character representations into a
+#' standardized calendar period object. The function resolves the finest
+#' possible calendar granularity supported by the input, subject to the
+#' \code{with_year} flag.
+#'
+#' Dispatch is performed in the following order:
+#' \enumerate{
+#'   \item Date-like inputs are interpreted using calendar date rules
+#'   \item Objects inheriting from \code{fiscal_period_class} are converted
+#'         using fiscal-to-calendar mappings
+#'   \item Character inputs are parsed heuristically for calendar periods
+#' }
+#'
+#' @param x A vector of dates, character strings, or objects inheriting from
+#'   \code{fiscal_period_class}.
+#' @param with_year Logical. If \code{TRUE}, year information is included in the
+#'   resulting calendar period where applicable. If \code{FALSE}, only
+#'   sub-annual periods (such as months or quarters) are returned.
+#'
+#' @return A character vector of class \code{calendar_period_class}, with one
+#'   element per input. Unparseable inputs return \code{NA}.
+#'
+#' @details
+#' This function is a high-level coercion wrapper. It delegates parsing and
+#' conversion to the following internal helpers depending on input type:
+#' \itemize{
+#'   \item \code{as_calendar_period_for_date()}
+#'   \item \code{as_calendar_period_for_fiscal_period()}
+#'   \item \code{as_calendar_period_for_txt()}
+#' }
+#'
+#' Character inputs may represent months, quarters, or years using common
+#' calendar conventions. When multiple interpretations are possible, the
+#' finest granularity is preferred.
+#'
+#' @examples
+#' as_calendar_period(as.Date("2023-06-15"))
+#'
+#' as_calendar_period("Q2 2023")
+#'
+#' as_calendar_period("2021")
+#'
+#' fp <- as_fiscal_period("Q4 2022-23")
+#' as_calendar_period(fp)
+#'
+#' @seealso
+#' \code{\link{as_fiscal_period}},
+#' \code{\link{as_calendar_period_for_txt}}
+#'
+#' @export
+as_calendar_period <- function(x, with_year = TRUE) {
+
+  if(is_date_type(x)){
+    res <- as_calendar_period_for_date(as.Date(x), with_year = with_year)
+  } else {
+    if(inherits(x, fiscal_period_class[1])){
+      res <- as_calendar_period_for_fiscal_period(x, with_year = with_year)
+    } else {
+      if(is.character(x)){
+        res <- as_calendar_period_for_txt(x, with_year = with_year)
+      } else {
+        stop("Input must be a date, fiscal_period, or character vector.", call. = FALSE)
+      }
+    }
+  }
+  class(res) <- calendar_period_class
+  res
+}
 
 
 #' Extract frequency from fiscal periods
@@ -766,9 +841,9 @@ as.Date.calendar_period <- function(
 #'
 #' @export
 previous_period <- function(x) {
-  if(inherits(x, fiscal_period_class)){
+  if(inherits(x, fiscal_period_class[1])){
     res <- previous_period_for_fiscal_period(x)
-  } else if (inherits(x, calendar_period_class)) {
+  } else if (inherits(x, calendar_period_class[1])) {
     res <- previous_period_for_calendar_period(x)
   } else {
     stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)
@@ -822,9 +897,9 @@ previous_period <- function(x) {
 #'
 #' @export
 previous_year <- function(x) {
-  if(inherits(x, fiscal_period_class)){
+  if(inherits(x, fiscal_period_class[1])){
     res <- previous_period_for_fiscal_period(x, lag_len = c("month" = 365, "quarter" = 365, "halfyear" = 365, "year" = 365))
-  } else if (inherits(x, calendar_period_class)) {
+  } else if (inherits(x, calendar_period_class[1])) {
     res <- previous_period_for_calendar_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
   } else {
     stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)

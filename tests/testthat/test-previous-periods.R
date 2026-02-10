@@ -187,6 +187,7 @@ test_that("previous_period and previous_year work for calendar quarters", {
   expect_s3_class(x, calendar_period_class)
   expect_length(x, length(raw))
 
+
   ## previous adjacent quarter
   prev_p <- previous_period(x)
 
