@@ -906,3 +906,75 @@ previous_year <- function(x) {
   }
   res
 }
+
+
+#' Check whether a period vector is continuous
+#'
+#' Determines whether a vector of calendar or fiscal periods represents a
+#' continuous sequence with no missing gaps, allowing for reasonable variation
+#' in period lengths.
+#'
+#' Continuity is evaluated by converting periods to mid-point dates and checking
+#' whether the gaps between consecutive periods are consistent with the expected
+#' spacing implied by the period frequency.
+#'
+#' Supported frequencies are month, quarter, half-year, and year. Mixed
+#' frequencies are treated as non-continuous.
+#'
+#' @param fp A vector inheriting from a recognized period class
+#'   (calendar or fiscal).
+#'
+#' @return Logical scalar. \code{TRUE} if the periods form a continuous sequence,
+#'   otherwise \code{FALSE}.
+#'
+#' @details
+#' A tolerance of 20 percent is allowed when comparing observed gaps to expected
+#' gaps in order to account for varying month lengths, leap years, and calendar
+#' irregularities.
+#'
+#' The input does not need to be ordered; periods are sorted internally before
+#' continuity is assessed.
+#'
+#' @examples
+#' x <- as_calendar_period(c("Jan 2020", "Feb 2020", "Mar 2020"))
+#' is_continuous(x)
+#'
+#' @export
+is_continuous <- function(fp) {
+
+  if(!is_period_type(fp)){
+    stop("Input is not a recognized period type (fiscal or calendar).", call. = FALSE)
+  }
+
+  fp_date <- as.Date(fp, anchor = "mid")
+  freq <- stats::frequency(fp, singular = TRUE)
+
+  if(freq == "mixed"){
+    return(FALSE)
+  }
+
+  expected_gap <- dplyr::case_when(
+    freq == "month" ~ 30,
+    freq == "quarter" ~ 90,
+    freq == "halfyear" ~ 182,
+    freq == "year" ~ 365,
+    TRUE ~ NA_real_
+  )
+
+  if( is.na(expected_gap))  return(FALSE)
+
+  # Check if gaps between consecutive dates are consistent with expected gap
+
+  gap_chk <- fp_date %>% sort() %>% diff()
+  gap_pct <- gap_chk / expected_gap
+
+  if(any(abs(gap_pct-1) > 0.2)){
+    # allow 20% deviation in gap length to account for varying month lengths, leap years, etc.
+    return(FALSE)
+  } else {
+    return(TRUE)
+  }
+
+
+}
+
