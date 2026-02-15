@@ -25,7 +25,7 @@ test_that("previous_period and previous_year work for mixed fiscal frequencies",
     "H2 2020-21"          # fiscal half (H2 FY2021)
   )
 
-  x <- as_fiscal_period(raw)
+  x <- as_fiscal_period(raw, homogeneous_frequency = FALSE)
 
   expect_s3_class(x, fiscal_period_class)
   expect_length(x, length(raw))

@@ -876,34 +876,85 @@ previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "q
 
 
 
-as_fiscal_period_for_txt <- function(x, with_year = TRUE) {
+as_fiscal_period_for_txt <- function(
+    x,
+    with_year = TRUE,
+    homogeneous_frequency_priority = TRUE,
+    disable_sequential_detection = FALSE) {
 
   n <- length(x)
   out <- rep(NA_character_, n)
 
-  # 1. Month (finest granularity)
-  month_result <- fiscal_month_for_txt(x, with_year = with_year)
-  out <- ifelse(is.na(out) & !is.na(month_result), month_result, out)
+  # -------------------------------
+  # 1. Homogeneous detection block
+  # -------------------------------
+  if (homogeneous_frequency_priority) {
 
-  # 2. Quarter
-  still_na <- is.na(out)
-  if (any(still_na)) {
-    quarter_result <- fiscal_quarter_for_txt(x[still_na], with_year = with_year)
-    out[still_na] <- ifelse(!is.na(quarter_result), quarter_result, out[still_na])
+    month_result    <- fiscal_month_for_txt(x, with_year = with_year)
+    quarter_result  <- fiscal_quarter_for_txt(x, with_year = with_year)
+    halfyear_result <- fiscal_halfyear_for_txt(x, with_year = with_year)
+    year_result     <- if (with_year) extract_fy(x) else rep(NA_character_, n)
+
+    na_counts <- c(
+      month    = sum(is.na(month_result)),
+      quarter  = sum(is.na(quarter_result)),
+      halfyear = sum(is.na(halfyear_result)),
+      year     = sum(is.na(year_result))
+    )
+
+    best_freq <- names(which.min(na_counts))
+    # This ensures that if multiple frequencies have the same (lowest) NA count, we pick the finest granularity among them
+    best_freq <- intersect(c("month", "quarter", "halfyear", "year"), best_freq)[1]
+
+    out <- switch(
+      best_freq,
+      month    = month_result,
+      quarter  = quarter_result,
+      halfyear = halfyear_result,
+      year     = year_result
+    )
   }
 
-  # 3. Half-year
-  still_na <- is.na(out)
-  if (any(still_na)) {
-    halfyear_result <- fiscal_halfyear_for_txt(x[still_na], with_year = with_year)
-    out[still_na] <- ifelse(!is.na(halfyear_result), halfyear_result, out[still_na])
-  }
+  # -------------------------------------------------
+  # 2. Sequential fallback (if allowed and needed)
+  # -------------------------------------------------
+  if (!disable_sequential_detection) {
 
-  # 4. Year (coarsest)
-  still_na <- is.na(out)
-  if (any(still_na) && with_year) {
-    year_result <- extract_fy(x[still_na])
-    out[still_na] <- ifelse(!is.na(year_result), year_result, out[still_na])
+    still_na <- is.na(out)
+
+    if (any(still_na)) {
+
+      # Month
+      month_result <- fiscal_month_for_txt(x[still_na], with_year = with_year)
+      out[still_na] <- ifelse(!is.na(month_result), month_result, out[still_na])
+
+      still_na <- is.na(out)
+    }
+
+    if (any(still_na)) {
+
+      # Quarter
+      quarter_result <- fiscal_quarter_for_txt(x[still_na], with_year = with_year)
+      out[still_na] <- ifelse(!is.na(quarter_result), quarter_result, out[still_na])
+
+      still_na <- is.na(out)
+    }
+
+    if (any(still_na)) {
+
+      # Halfyear
+      halfyear_result <- fiscal_halfyear_for_txt(x[still_na], with_year = with_year)
+      out[still_na] <- ifelse(!is.na(halfyear_result), halfyear_result, out[still_na])
+
+      still_na <- is.na(out)
+    }
+
+    if (any(still_na) && with_year) {
+
+      # Year
+      year_result <- extract_fy(x[still_na])
+      out[still_na] <- ifelse(!is.na(year_result), year_result, out[still_na])
+    }
   }
 
   class(out) <- fiscal_period_class
@@ -929,13 +980,17 @@ as_fiscal_period_for_date <- function(x, with_year = TRUE) {
 
   # Proceed for other cases (month, quarter, halfyear, year)
   if(fq %in% c("month", "quarter", "halfyear", "year")){
-    out <- dplyr::case_when(
-      fq == "month" ~ fiscal_month_for_date(x, with_year = with_year),
-      fq == "quarter" ~ fiscal_quarter_for_date(x, with_year = with_year),
-      fq == "halfyear" ~ fiscal_halfyear_for_date(x, with_year = with_year),
-      fq == "year" ~ fiscal_year_for_date(x),
-      TRUE ~ NA_character_
-    )
+    out <- if (fq == "month") {
+      fiscal_month_for_date(x, with_year = with_year)
+    } else if (fq == "quarter") {
+      fiscal_quarter_for_date(x, with_year = with_year)
+    } else if (fq == "halfyear") {
+      fiscal_halfyear_for_date(x, with_year = with_year)
+    } else if (fq == "year") {
+      fiscal_year_for_date(x)
+    } else {
+      NA_character_
+    }
     return(out)
   }
   return(NULL)
@@ -1026,12 +1081,15 @@ as_calendar_period_for_date <- function(x, with_year = TRUE) {
 
   # Proceed for other cases (month, quarter, year)
   if(fq %in% c("month", "quarter", "year")){
-    out <- dplyr::case_when(
-      fq == "month" ~ fiscal_month_for_date(x, with_year = with_year),
-      fq == "quarter" ~ calendar_quarter_for_date(x, with_year = with_year),
-      fq == "year" ~ as.character(lubridate::year(x)),
-      TRUE ~ NA_character_
-    )
+    out <- if (fq == "month") {
+      fiscal_month_for_date(x, with_year = with_year)
+    } else if (fq == "quarter") {
+      calendar_quarter_for_date(x, with_year = with_year)
+    } else if (fq == "year") {
+      as.character(lubridate::year(x))
+    } else {
+      NA_character_
+    }
     return(out)
   }
   return(NULL)

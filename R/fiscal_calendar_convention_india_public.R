@@ -346,7 +346,7 @@ fiscal_year <- function(x){
 #' as_fiscal_period(x)
 #'
 #' @export
-as_fiscal_period <- function(x, with_year = TRUE) {
+as_fiscal_period <- function(x, with_year = TRUE, homogeneous_frequency = TRUE) {
 
   if(is_date_type(x)){
     res <- as_fiscal_period_for_date(as.Date(x), with_year = with_year)
@@ -355,7 +355,9 @@ as_fiscal_period <- function(x, with_year = TRUE) {
       res <- as_fiscal_period_for_calendar_period(x, with_year = with_year)
     } else {
       if(is.character(x)){
-        res <- as_fiscal_period_for_txt(x, with_year = with_year)
+        res <- as_fiscal_period_for_txt(x, with_year = with_year,
+                                        homogeneous_frequency_priority = homogeneous_frequency,
+                                        disable_sequential_detection = homogeneous_frequency)
       } else {
         stop("Input must be a date, calendar_period, or character vector.", call. = FALSE)
       }

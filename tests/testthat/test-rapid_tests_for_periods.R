@@ -39,7 +39,8 @@ test_that("frequency detection returns mixed when needed", {
 
   x <- c("Jan:2023", "Q1:2023-24")
 
-  freq <- x %>% as_fiscal_period() %>% stats::frequency(singular = TRUE)
+  freq <- x %>% as_fiscal_period(homogeneous_frequency = FALSE) %>%
+    stats::frequency(singular = TRUE)
 
   expect_equal(freq, "mixed")
 })
