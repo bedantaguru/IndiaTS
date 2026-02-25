@@ -146,7 +146,7 @@ DEV <- function(){
       meta.disaggregation_group = dg_this) %>%
     select(
       time = Year,
-      meta.domain = Indicator,
+      #meta.domain = Indicator,
       meta.name = Industry,
       value.level = value,
       meta.price_basis = price_basis,
@@ -174,7 +174,7 @@ DEV <- function(){
     mutate(meta.disaggregation_group = dg_this) %>%
     select(
       time = Year,
-      meta.domain = Indicator,
+      #meta.domain = Indicator,
       meta.name = Industry,
       value.level = value,
       meta.price_basis = price_basis,
@@ -182,7 +182,7 @@ DEV <- function(){
       meta.unit = Unit,
       meta.release_tag = Revision,
       meta.release_date = release_date,
-      meta.parent = Indicator,
+      #meta.parent = "#root",
       meta.disaggregation_group,
       meta.is_most_granular,
       meta.is_published,
@@ -213,7 +213,7 @@ DEV <- function(){
     mutate(meta.disaggregation_group = dg_this) %>%
     select(
       time = Year,
-      meta.domain = Indicator,
+      #meta.domain = Indicator,
       meta.name = Subindustry,
       value.level = value,
       meta.price_basis = price_basis,
@@ -229,7 +229,7 @@ DEV <- function(){
 
 
   dp2_ag1 <- d2 %>%
-    filter(is.na(Subindustry), !is.na(Industry)) %>%
+    filter(is.na(subindustry_rep), !is.na(Industry)) %>%
     filter(Industry!= "Total Gross Value Added") %>%
     mutate(meta.is_most_granular  = FALSE,
            meta.is_published  = TRUE)
@@ -241,8 +241,8 @@ DEV <- function(){
     mutate(meta.disaggregation_group = dg_this) %>%
     select(
       time = Year,
-      meta.domain = Indicator,
-      meta.name = Subindustry,
+      #meta.domain = Indicator,
+      meta.name = Industry,
       value.level = value,
       meta.price_basis = price_basis,
       meta.accumulation_rule = accumulation_rule,
@@ -268,7 +268,7 @@ DEV <- function(){
     mutate(meta.disaggregation_group = dg_this) %>%
     select(
       time = Year,
-      meta.domain = Indicator,
+      #meta.domain = Indicator,
       meta.name = Subindustry,
       value.level = value,
       meta.price_basis = price_basis,
@@ -308,7 +308,7 @@ DEV <- function(){
       meta.disaggregation_group = "Institutional Sector") %>%
     select(
       time = Year,
-      meta.domain = Indicator,
+      #meta.domain = Indicator,
       meta.name = `Institutional Sector`,
       value.level = value,
       meta.price_basis = price_basis,
@@ -326,9 +326,11 @@ DEV <- function(){
 
   dp_all_gr <- bind_rows(dp1, dp2, dp3)
 
-  dp_all_agg <- bind_rows(dp1_ag, dp2_ag1, dp2_ag2)
+  #dp_all_agg <- bind_rows(dp1_ag, dp2_ag1, dp2_ag2)
 
-  dp_all <- bind_rows(dp_all_gr, dp_all_agg)
+  #dp_all <- bind_rows(dp_all_gr, dp_all_agg)
+
+  dp_all <- dp_all_gr
 
   exclusions <- dat %>% anti_join(dp_all, by = "row_id")
 
@@ -338,11 +340,12 @@ DEV <- function(){
 
 }
 
+check_possible_tdf_long <- function(d){
 
-as_tdf_long <- function(d, hierarchy_map = NULL){
+}
 
-  # check if d is data frame and if so check if d has "time" column (1st one) and rest columns should be like value.* or meta.* only...
-  # then attach tdf calss
+as_tdf_long <- function(d, hierarchy_map = NULL, retain_known_disaggregation_groups_only = TRUE){
+
 
   if(!is.data.frame(d)){
     stop("Input must be a data.frame!!", call. = FALSE)
@@ -371,17 +374,28 @@ as_tdf_long <- function(d, hierarchy_map = NULL){
   d <- d[c("time", value_cols, meta_cols)]
 
   # Check for multiple release
-  chk <- d %>% group_by(time, meta.domain, meta.name, meta.price_basis) %>% count() %>% filter(n>1)
+  chk <- d %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis) %>% count() %>% filter(n>1)
 
   if(NROW(chk) > 0){
+
+    d <- d %>% filter(meta.release_tag != "#main")
+
+    chk2 <- d %>% distinct() %>%
+      group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
+      count() %>% filter(n>1)
+
+    if(NROW(chk2) > 0){
+      stop("Duplicate entries found for the same combination of time, meta.name, meta.price_basis, meta.disaggregation_group and meta.release_tag. Please ensure that each combination is unique.", call. = FALSE)
+    }
+
     # if  meta.release_date exists then take the latest revision only based on release date otherwise take the latest revision based on release order
     if("meta.release_date" %in% colnames(d)){
-      dpart <- d %>% group_by(time, meta.domain, meta.name, meta.price_basis) %>%
+      dpart <- d %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis) %>%
         slice_max(order_by = meta.release_date, n = 1, with_ties = FALSE) %>%
         ungroup()
     } else if("meta.release_order" %in% colnames(d)){
       # if release date is not there but release tag is there then take the latest revision based on release tag order (assuming release tag has a natural order in the data)
-      dpart <- d %>% group_by(time, meta.domain, meta.name, meta.price_basis) %>%
+      dpart <- d %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis) %>%
         slice_max(order_by = meta.release_order, n = 1, with_ties = FALSE) %>%
         ungroup()
     } else {
@@ -395,16 +409,51 @@ as_tdf_long <- function(d, hierarchy_map = NULL){
   }
 
 
-  chk <- d %>% group_by(time, meta.domain, meta.name, meta.price_basis, meta.release_tag, meta.disaggregation_group) %>% count()
+  chk <- d %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>% count()
 
   if(any(chk$n>1)){
-    stop("Duplicate entries found for the same combination of time, meta.domain, meta.name, meta.price_basis, and meta.release_tag. Please ensure that each combination is unique.", call. = FALSE)
+    stop("Duplicate entries found for the same combination of time, meta.name, meta.price_basis, and meta.release_tag. Please ensure that each combination is unique.", call. = FALSE)
   }
 
+  if(!is.null(hierarchy_map)){
+    if(!is.data.frame(hierarchy_map)){
+      stop("hierarchy_map must be a data.frame!!", call. = FALSE)
+    }
+
+    if(retain_known_disaggregation_groups_only){
+      known_dgs <- colnames(hierarchy_map)
+      data_dgs <- d$meta.disaggregation_group %>% unique()
+
+      if(length(intersect(known_dgs, data_dgs)) == 0){
+        stop("None of the disaggregation groups in data are present in hierarchy_map. Please check the data and hierarchy_map.", call. = FALSE)
+      }
+
+      not_in_hmap_dgs <- setdiff(data_dgs, known_dgs)
+      if(length(not_in_hmap_dgs)>0){
+        message(paste0("These disaggregation groups are present in data but not in hierarchy_map. They will be filtered out: ",
+                       paste0(not_in_hmap_dgs, collapse = ", ")))
+        d <- d %>% filter(meta.disaggregation_group %in% known_dgs)
+      }
+    }
+  }
+
+  # is meta. accumulation_rule and temporal_accumulation_rule not present init with default sum
+  if(!"meta.accumulation_rule" %in% colnames(d)){
+    d <- d %>% mutate(meta.accumulation_rule = "sum")
+  }
+
+  if(!"meta.temporal_accumulation_rule" %in% colnames(d)){
+    d <- d %>% mutate(meta.temporal_accumulation_rule = "sum")
+  }
 
   class(d) <- tdf_class
 
   d$time <- as_fiscal_period(d$time)
+
+  fqs <- frequency(d$time)
+  if(length(unique(fqs))>1){
+    warning("Multiple frequencies found in time column. Please ensure that all entries in time column have the same frequency.", call. = FALSE)
+  }
 
   attr(d, "shape") <- "long"
 
@@ -425,9 +474,14 @@ which_disaggregation_group <- function(meta_names, hmap){
 }
 
 
-aggregate_component <- function(tdf_l, auto_tally = TRUE){
+aggregate_component <- function(tdf_l, hierarchy_map = NULL){
 
-  hmap <- attr(tdf_l, "hierarchy_map")
+  if(!is.null(hierarchy_map)){
+    hmap <- hierarchy_map
+  } else {
+    hmap <- attr(tdf_l, "hierarchy_map")
+  }
+
 
   if(!is.null(hmap)){
     hmap_present <- TRUE
@@ -458,7 +512,9 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
     hmap_present <- FALSE
   }
 
-  tdf_ll <- split(tdf_l, list(tdf_l$meta.domain, tdf_l$meta.disaggregation_group))
+  tdf_l$lineage <- ""
+
+  tdf_ll <- split(tdf_l, tdf_l$meta.disaggregation_group)
 
   for_a_node <- function(nd){
 
@@ -468,19 +524,16 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
       nd$meta.accumulation_rule[1],
       "sum" = sum,
       "mean" = mean,
-      "last" = function(x) tail(x, 1),
       stop(paste0("Unknown accumulation rule: ", nd$meta.accumulation_rule[1]), call. = FALSE))
 
     if( "meta.unit" %in% nd_orig_cols){
-      unit_chk <- nd %>% group_by(time, meta.domain, meta.price_basis, meta.release_tag) %>%
+      unit_chk <- nd %>% group_by(time, meta.price_basis, meta.release_tag) %>%
         summarise(n_unit = n_distinct(meta.unit),.groups = "drop") %>%
         filter(n_unit > 1)
       if(NROW(unit_chk) > 0){
-        stop("Multiple units found in a single combination of time, meta.domain, meta.price_basis and meta.release_tag. Please ensure that each such combination has a unique unit.", call. = FALSE)
+        stop("Multiple units found in a single combination of time, meta.disaggregation_group, meta.price_basis and meta.release_tag. Please ensure that each such combination has a unique unit.", call. = FALSE)
       }
     }
-
-
 
     if(!("meta.release_date" %in% nd_orig_cols)){
       # A dummy release date is added here just to ensure that the code runs without error. This will be discarded later in the code.
@@ -493,13 +546,37 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
     }
 
     do_for_a_variant <- function(nd_v){
-      nd_ag <- nd_v %>% group_by(time, meta.domain, meta.price_basis, meta.release_tag, meta.name = meta.parent) %>%
+      if(nd_v$meta.parent[1] == "#root"){
+        # no further aggregation possible or not defined.
+        return(nd_v)
+      }
+
+      # check if all categories are present or not
+
+      if(hmap_present){
+        hthis <- which_disaggregation_group(nd_v$meta.name, hmap = hmap)[1]
+        expected_cats <- unique(hmap[[hthis]])
+        actual_cats <- unique(nd_v$meta.name)
+        missing_cats <- setdiff(expected_cats, actual_cats)
+        if(length(missing_cats)>0){
+          warning(paste0("These categories are expected based on hierarchy_map but not found in data for meta.disaggregation_group ", hthis, ": ",
+                         paste0(missing_cats, collapse = ", ")), call. = FALSE)
+        }
+      }
+
+      nd_ag <- nd_v %>%
+        #select(-meta.name) %>%
+        rename(src = meta.name) %>%
+        rename(meta.name = meta.parent) %>%
+        group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
         summarise(
           value.level = agg_fn(value.level),
           meta.unit = meta.unit[1],
-          meta.release_date = meta.release_date[1],
-          meta.release_order = meta.release_order[1],
+          meta.release_date = max(meta.release_date),
+          meta.release_order = max(meta.release_order),
           meta.accumulation_rule = meta.accumulation_rule[1],
+          meta.temporal_accumulation_rule = meta.temporal_accumulation_rule[1],
+          lineage = paste0(lineage[1], " > ", meta.disaggregation_group[1],":", paste0(unique(src), collapse = " + ")),
           .groups = "drop"
         ) %>%
         mutate(
@@ -509,7 +586,7 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
         )
 
       if(hmap_present){
-        hthis <- which_disaggregation_group(nd_ag$meta.name)[1]
+        hthis <- which_disaggregation_group(nd_ag$meta.name, hmap = hmap)[1]
         nd_ag <- nd_ag %>%
           mutate(
             meta.disaggregation_group = hthis
@@ -531,8 +608,8 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
     final_variant <- own_variant
 
     if(hmap_present){
-      hthis <- which_disaggregation_group(nd$meta.name)[1]
-      own_variant_hthis <- which_disaggregation_group(own_variant$meta.name)[1]
+      hthis <- which_disaggregation_group(nd$meta.name, hmap = hmap)[1]
+      own_variant_hthis <- which_disaggregation_group(own_variant$meta.name, hmap = hmap)[1]
       h_to_do <- hmap_stats %>%
         filter(hierarchy %in% hthis) %>%
         filter(!(disaggregation_group %in% own_variant_hthis))
@@ -544,9 +621,8 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
           colnames(this_map) <- c("meta.name", "meta.parent")
           this_map <- distinct(this_map)
 
-          nd_dg <- nd %>% select(-meta.disaggregation_group, -meta.parent) %>%
-            left_join(this_map, by = "meta.name") %>%
-            mutate(meta.disaggregation_group = dg)
+          nd_dg <- nd %>% select(-meta.parent) %>%
+            left_join(this_map, by = "meta.name")
           do_for_a_variant(nd_dg)
         }
 
@@ -558,29 +634,18 @@ aggregate_component <- function(tdf_l, auto_tally = TRUE){
       }
     }
 
-    # Auto Tally
-
-    if(auto_tally){
-
-      chk_tally <- final_variant %>%
-        group_by(time, meta.domain, meta.name, meta.price_basis, meta.release_tag) %>%
-        mutate(n=n()) %>% ungroup() %>% filter(n>1)
-
-      if(NROW(chk_tally) > 0){
-        chk_tally2 <- chk_tally %>%
-          group_by(time, meta.name, meta.release_tag, meta.price_basis) %>%
-          summarise(mv=min(value.level), MV = max(value.level), .groups = "drop") %>% ungroup() %>%
-          mutate(chk = MV/mv) %>% filter(chk>1)
-        if(NROW(chk_tally2)>0){
-          warning("Auto-tally check failed for some combinations of time, meta.name, meta.release_tag and meta.price_basis. Please check the data for these combinations: ", call. = FALSE, immediate. = TRUE)
-        }
-      }
-    }
-
     final_variant[intersect(nd_orig_cols, colnames(final_variant))]
   }
 
   tdf_agg <- tdf_ll %>% map(for_a_node) %>% bind_rows()
+
+  if("meta.release_date" %in% colnames(tdf_agg)){
+    tdf_agg <- tdf_agg %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
+      slice_max(order_by = meta.release_date, n = 1, with_ties = FALSE)
+  } else  if("meta.release_order" %in% colnames(tdf_agg)){
+    tdf_agg <- tdf_agg %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
+      slice_max(order_by = meta.release_order, n = 1, with_ties = FALSE)
+  }
 
   tdf_agg %>% distinct()
 
@@ -592,15 +657,25 @@ CHECK <- function(){
   td <- DEV()
 
   d0 <- aggregate_component(td)
+  #d0 <- aggregate_component(td %>% filter(time=="2011-12"))
 
-  d0 %>% group_by(time, meta.domain, meta.name, meta.price_basis, meta.release_tag) %>% count() %>% filter(n>1)
-  # d0 %>%
-  #   group_by(time, meta.domain, meta.name, meta.price_basis, meta.release_tag,
-  #            meta.disaggregation_group) %>% mutate(n=n()) %>% filter(n>1) %>% group_split()
-  #
+
+  # f<- function(){
+  #   # check
+  #   d0 %>%
+  #     group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
+  #     mutate(n=n()) %>% ungroup() %>% filter(n>1) %>%
+  #     group_by(time, meta.name, meta.release_tag, meta.price_basis) %>%
+  #     summarise(mv=min(value.level), MV = max(value.level), .groups = "drop") %>% ungroup() %>%
+  #     mutate(chk = abs(MV/mv-1)) %>% filter(chk>0.004)
+  # }
+
+
+  d0 %>% group_by(time, meta.name, meta.price_basis, meta.release_tag) %>% count() %>% filter(n>1)
+
 
   d0 %>%
-    group_by(time, meta.domain, meta.name, meta.price_basis, meta.release_tag,
+    group_by(time, meta.name, meta.price_basis, meta.release_tag,
              meta.disaggregation_group) %>% mutate(n=n()) %>% filter(n>1)->uu
   uu %>% summarise(rd = value.level %>% range() %>% diff() %>% as.numeric()) %>% group_by(meta.release_tag) %>% summarise(max_rd = max(rd))
 
