@@ -4,7 +4,7 @@
 \alias{as_fiscal_period}
 \title{Parse character input as fiscal periods}
 \usage{
-as_fiscal_period(x, with_year = TRUE)
+as_fiscal_period(x, with_year = TRUE, homogeneous_frequency = TRUE)
 }
 \arguments{
 \item{x}{A character vector representing fiscal periods.}
