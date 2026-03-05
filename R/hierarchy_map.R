@@ -1,6 +1,6 @@
 
 # hmap : Hierarchy map
-get_hmap_stats <- function(hmap){
+hmap_get_stats <- function(hmap){
 
   hmd <- colnames(hmap) %>%
     map(
@@ -116,3 +116,13 @@ get_hmap_stats <- function(hmap){
 
 
 }
+
+hmap_which_disaggregation_group <- function(meta_names, hmap){
+  meta_names <- unique(meta_names)
+  hmvec <- hmap %>% map_dbl(function(.x){length(intersect(.x, meta_names))/length(.x)})
+  if(max(hmvec) == 0){
+    return(NA_character_)
+  }
+  which(hmvec==max(hmvec)) %>% names
+}
+
