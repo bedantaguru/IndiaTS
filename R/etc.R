@@ -77,3 +77,52 @@ get_extdata_path <- function(file) {
   system.file("extdata", file,
               package = utils::packageName())
 }
+
+
+
+
+cols_breaking_group_uniqueness <- function(d, group_colnames) {
+
+  if (!inherits(d, "data.frame")) {
+    stop("`d` must be a data.frame or tibble.")
+  }
+
+  # If group columns not supplied
+  if (missing(group_colnames)) {
+
+    if (dplyr::is_grouped_df(d)) {
+      group_colnames <- dplyr::group_vars(d)
+    } else {
+      return(colnames(d))
+    }
+
+  }
+
+  group_colnames <- unique(group_colnames)
+
+  # If grouping uses all columns, nothing can break uniqueness
+  if (length(group_colnames) == ncol(d)) {
+    return(character(0))
+  }
+
+  rest_cols <- setdiff(colnames(d), group_colnames)
+
+  # Compute within-group distinct counts
+  d2 <- d %>%
+    dplyr::ungroup() %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_colnames))) %>%
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(rest_cols), dplyr::n_distinct),
+      .groups = "drop"
+    )
+
+  # Max distinct count for each column across groups
+  max_counts <- d2 %>%
+    dplyr::summarise(dplyr::across(dplyr::all_of(rest_cols), max))
+
+  max_counts <- as.matrix(max_counts)
+
+  # Columns with variation (>1)
+  colnames(max_counts)[max_counts > 1]
+
+}

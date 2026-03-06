@@ -9,4 +9,6 @@
 library(testthat)
 library(IndiaTS)
 
+options(lifecycle_verbosity = "error")
+
 test_check("IndiaTS")
