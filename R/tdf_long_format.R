@@ -45,9 +45,6 @@ tdf_long_check_structure  <- function(dat, hmap, add_latest = FALSE, retain_know
   # Possible change of data
   dat2 <- tdf_long_cast_required_cols(dat)
 
-  # if meta.release_tag has multiple entries for fixed
-  chk <- dat2 %>% group_by(time, meta.name, meta.disaggregation_group, meta.price_basis) %>% count() %>% filter(n>1)
-
   dat2 <- tdf_long_release_tag_task(dat2, add_latest = add_latest)
 
   # check if meta.name and meta.disaggregation_group values are present in hierarchy map
@@ -76,14 +73,6 @@ tdf_long_cast_required_cols <- function(dat){
 
   if(!"meta.release_tag" %in% colnames(dat)){
     dat <- dat %>% mutate(`meta.release_tag` = "as-is")
-  }
-
-  if(!"meta.accumulation_rule" %in% colnames(dat)){
-    dat <- dat %>% mutate(meta.accumulation_rule = "sum")
-  }
-
-  if(!"meta.temporal_accumulation_rule" %in% colnames(dat)){
-    dat <- dat %>% mutate(meta.temporal_accumulation_rule = "sum")
   }
 
   dat

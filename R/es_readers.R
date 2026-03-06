@@ -144,191 +144,9 @@ es_convert_gva_annual <- function(dat, hmap) {
 
   dl <- d %>% split(list(.$year, .$revision))
 
-  do_for_a_section <- function(dn) {
-    if(NROW(dn) == 0) return(tibble::tibble())
-
-    dout <- tibble::tibble()
-
-    if("industry" %in% colnames(dn)){
-      dn_ind <- dn %>% filter(is.na(subindustry))
-      dgs <- hmap_which_disaggregation_group(dn_ind$industry, hmap)
-
-      if(!is.na(dgs) && length(dgs)>0){
-
-        dn_ind_part <- dgs %>% map(
-          function(dg){
-            d0 <- dn_ind %>%
-              filter(str_clean(industry) %in% str_clean(hmap[[dg]]))
-
-            d0 <- d0 %>%
-              mutate(meta.name = industry,
-                     meta.disaggregation_group = dg) %>%
-              select(-industry)
-
-            not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
-
-            if(length(not_preset)>0){
-              stop("These industry categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
-                   paste0(not_preset, collapse = ", "), call. = FALSE)
-            }
-
-            d0
-
-          }
-        ) %>% bind_rows()
-
-        dn_ind_part <- dn_ind_part %>% select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
-        dout <- dout %>% bind_rows(dn_ind_part)
-
-      }
-
-    }
-
-    if(("subindustry" %in% colnames(dn)) && ("industry" %in% colnames(dn))){
-      dn_sub <- dn %>% filter(!is.na(subindustry))
-      dgs <- hmap_which_disaggregation_group(dn_sub$subindustry, hmap)
-
-      if(!is.na(dgs) && length(dgs)>0){
-        dn_sub_part <- dgs %>% map(
-          function(dg){
-            d0 <- dn_sub %>%
-              filter(str_clean(subindustry) %in% str_clean(hmap[[dg]]))
-
-            d0 <- d0 %>%
-              mutate(meta.name = subindustry,
-                     meta.disaggregation_group = dg) %>%
-              select(-subindustry, -industry)
-
-            not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
-
-            if(length(not_preset)>0){
-              # Search in industry level if not found in subindustry
-              d1 <- dn_ind %>%
-                filter(str_clean(industry) %in% str_clean(hmap[[dg]]))
-
-              d1 <- d1 %>%
-                mutate(meta.name = industry,
-                       meta.disaggregation_group = dg) %>%
-                select(-subindustry, -industry)
-
-              d0 <- d0 %>%
-                bind_rows(d1)
-
-              not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
-
-              # Now raise error as no way to get those
-              if(length(not_preset)>0){
-                stop("These subindustry categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
-                     paste0(not_preset, collapse = ", "), call. = FALSE)
-
-              }
-
-            }
-
-            d0
-
-
-          }
-        ) %>% bind_rows()
-
-        dn_sub_part <- dn_sub_part %>% select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
-        dout <- dout %>% bind_rows(dn_sub_part)
-
-      }
-
-    }
-
-    # institutional_sector processing can be added similarly if needed
-    # TODO
-    if("institutional_sector" %in% colnames(dn)){
-      dn_inst <- dn %>%
-        filter(is.na(industry) & is.na(subindustry) & !is.na(institutional_sector))
-
-      dgs <- hmap_which_disaggregation_group(dn_sec$institutional_sector, hmap)
-
-      if(!is.na(dgs) && length(dgs)>0){
-
-        dn_inst_part <- dgs %>% map(
-          function(dg){
-            d0 <- dn_inst %>%
-              filter(str_clean(institutional_sector) %in% str_clean(hmap[[dg]]))
-
-            d0 <- d0 %>%
-              mutate(meta.name = institutional_sector,
-                     meta.disaggregation_group = dg) %>%
-              select(-institutional_sector)
-
-            not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
-
-            if(length(not_preset)>0){
-              stop("These institutional sector categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
-                   paste0(not_preset, collapse = ", "), call. = FALSE)
-            }
-
-            d0
-
-          }
-        ) %>% bind_rows()
-
-        dn_inst_part <- dn_inst_part %>%
-          select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
-        dout <- dout %>% bind_rows(dn_inst_part)
-      }
-
-    }
-
-    # Ideally only "Gross Value Added" would be remaining
-    d_not_done <- dn %>% anti_join(dout, by = "row_id")
-
-    if(NROW(d_not_done)>0){
-      d_not_done <- d_not_done %>%
-        rowwise() %>%
-        mutate(
-          cat_this = c_across(all_of(cat_cols)) %>%
-            na.omit() %>%
-            unique() %>%
-            sort() %>%
-            paste(collapse = " ")
-        ) %>%
-        ungroup()
-
-      dgs <- hmap_which_disaggregation_group(d_not_done$cat_this, hmap)
-
-      # warn if more than 1 disaggregation group is found
-      if(length(unique(dgs))>1){
-        warning(
-          "More than 1 disaggregation group found for the remaining categories in year: ",
-          unique(d_not_done$year)[1], " and revision: ",
-          unique(d_not_done$revision)[1],
-          ". This may lead to incorrect mapping. Please check the input data and the hmap. Disaggregation groups found: ",
-          paste0(unique(dgs), collapse = ", "))
-      }
-
-      dn_part <- d_not_done %>%
-        mutate(meta.name = cat_this,
-               meta.disaggregation_group = dgs) %>%
-        select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
-
-      dout <- dout %>% bind_rows(dn_part)
-
-      # Ideally only it should be empty
-      d_not_done <- dn %>% anti_join(dout, by = "row_id")
-      if(NROW(d_not_done)>0){
-        warning("There are still some rows that could not be mapped to any disaggregation group for year: ",
-                unique(d_not_done$year)[1], " and revision: ",
-                unique(d_not_done$revision)[1],
-                ". Please check the input data and the hmap.", call. = FALSE)
-      }
-
-
-
-    }
-
-    dout
-
-  }
-
-  d_out <- dl %>% map(do_for_a_section) %>% bind_rows()
+  d_out <- dl %>% map(function(.x){
+    es_convert_gva_annual_proc1(.x, hmap)
+  }) %>% bind_rows()
 
   not_done <- d %>% anti_join(d_out, by = "row_id")
 
@@ -364,6 +182,204 @@ es_convert_gva_annual <- function(dat, hmap) {
     distinct(time, meta.release_tag, meta.release_order, meta.price_basis, meta.unit, meta.name, meta.disaggregation_group, value.level)
 
   list(data = d_out, hmap = hmap)
+
+}
+
+es_convert_gva_annual_proc1 <- function(dn, hmap) {
+  if(NROW(dn) == 0) return(tibble::tibble())
+
+  dout <- es_convert_gva_annual_proc1_part(dn, hmap)
+
+  d_not_done <- dn %>% anti_join(dout, by = "row_id")
+
+  if(NROW(d_not_done)>0){
+    # TODO # Start it need to check
+    stop("[Not Developed] If you see this please contact developers. ",
+         "It means there are some rows that could not be mapped to any disaggregation group for year: ",
+         unique(d_not_done$year)[1], " and revision: ",
+         unique(d_not_done$revision)[1],
+         ". Please check the input data and the hmap.", call. = FALSE)
+    d_not_done <- d_not_done %>%
+      rowwise() %>%
+      mutate(
+        cat_this = c_across(all_of(cat_cols)) %>%
+          na.omit() %>%
+          unique() %>%
+          sort() %>%
+          paste(collapse = " ")
+      ) %>%
+      ungroup()
+
+
+    dgs <- hmap_which_disaggregation_group(d_not_done$cat_this, hmap)
+
+    # warn if more than 1 disaggregation group is found
+    if(length(unique(dgs))>1){
+      warning(
+        "More than 1 disaggregation group found for the remaining categories in year: ",
+        unique(d_not_done$year)[1], " and revision: ",
+        unique(d_not_done$revision)[1],
+        ". This may lead to incorrect mapping. Please check the input data and the hmap. Disaggregation groups found: ",
+        paste0(unique(dgs), collapse = ", "))
+    }
+
+    dn_part <- d_not_done %>%
+      mutate(meta.name = cat_this,
+             meta.disaggregation_group = dgs) %>%
+      select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
+
+    dout <- dout %>% bind_rows(dn_part)
+
+    # Ideally only it should be empty
+    d_not_done <- dn %>% anti_join(dout, by = "row_id")
+    if(NROW(d_not_done)>0){
+      warning("There are still some rows that could not be mapped to any disaggregation group for year: ",
+              unique(d_not_done$year)[1], " and revision: ",
+              unique(d_not_done$revision)[1],
+              ". Please check the input data and the hmap.", call. = FALSE)
+    }
+
+    # TODO # End
+  }
+
+  dout
+
+}
+
+es_convert_gva_annual_proc1_part <- function(dn, hmap){
+  if(NROW(dn) == 0) return(tibble::tibble())
+
+  dout <- tibble::tibble()
+
+  if("industry" %in% colnames(dn)){
+    dn_ind <- dn %>% filter(is.na(subindustry))
+    dgs <- hmap_which_disaggregation_group(dn_ind$industry, hmap)
+
+    if(all(!is.na(dgs)) && length(dgs)>0){
+
+      dn_ind_part <- dgs %>% map(
+        function(dg){
+          d0 <- dn_ind %>%
+            filter(str_clean(industry) %in% str_clean(hmap[[dg]]))
+
+          d0 <- d0 %>%
+            mutate(meta.name = industry,
+                   meta.disaggregation_group = dg) %>%
+            select(-industry)
+
+          not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
+
+          if(length(not_preset)>0){
+            stop("These industry categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
+                 paste0(not_preset, collapse = ", "), call. = FALSE)
+          }
+
+          d0
+
+        }
+      ) %>% bind_rows()
+
+      dn_ind_part <- dn_ind_part %>% select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
+      dout <- dout %>% bind_rows(dn_ind_part)
+
+    }
+
+  }
+
+  if(("subindustry" %in% colnames(dn)) && ("industry" %in% colnames(dn))){
+    dn_sub <- dn %>% filter(!is.na(subindustry))
+    dgs <- hmap_which_disaggregation_group(dn_sub$subindustry, hmap)
+
+    if(all(!is.na(dgs)) && length(dgs)>0){
+      dn_sub_part <- dgs %>% map(
+        function(dg){
+          d0 <- dn_sub %>%
+            filter(str_clean(subindustry) %in% str_clean(hmap[[dg]]))
+
+          d0 <- d0 %>%
+            mutate(meta.name = subindustry,
+                   meta.disaggregation_group = dg) %>%
+            select(-subindustry, -industry)
+
+          not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
+
+          if(length(not_preset)>0){
+            # Search in industry level if not found in subindustry
+            d1 <- dn_ind %>%
+              filter(str_clean(industry) %in% str_clean(hmap[[dg]]))
+
+            d1 <- d1 %>%
+              mutate(meta.name = industry,
+                     meta.disaggregation_group = dg) %>%
+              select(-subindustry, -industry)
+
+            d0 <- d0 %>%
+              bind_rows(d1)
+
+            not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
+
+            # Now raise error as no way to get those
+            if(length(not_preset)>0){
+              stop("These subindustry categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
+                   paste0(not_preset, collapse = ", "), call. = FALSE)
+
+            }
+
+          }
+
+          d0
+
+
+        }
+      ) %>% bind_rows()
+
+      dn_sub_part <- dn_sub_part %>% select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
+      dout <- dout %>% bind_rows(dn_sub_part)
+
+    }
+
+  }
+
+  # institutional_sector processing can be added similarly if needed
+  # TODO
+  if("institutional_sector" %in% colnames(dn)){
+    dn_inst <- dn %>%
+      filter(is.na(industry) & is.na(subindustry) & !is.na(institutional_sector))
+
+    dgs <- hmap_which_disaggregation_group(dn_sec$institutional_sector, hmap)
+
+    if(!is.na(dgs) && length(dgs)>0){
+
+      dn_inst_part <- dgs %>% map(
+        function(dg){
+          d0 <- dn_inst %>%
+            filter(str_clean(institutional_sector) %in% str_clean(hmap[[dg]]))
+
+          d0 <- d0 %>%
+            mutate(meta.name = institutional_sector,
+                   meta.disaggregation_group = dg) %>%
+            select(-institutional_sector)
+
+          not_preset <- str_clean(hmap[[dg]]) %>% setdiff(str_clean(d0$meta.name))
+
+          if(length(not_preset)>0){
+            stop("These institutional sector categories are not present in the input data but are expected based on the hmap for disaggregation group:- ", dg, ":- ",
+                 paste0(not_preset, collapse = ", "), call. = FALSE)
+          }
+
+          d0
+
+        }
+      ) %>% bind_rows()
+
+      dn_inst_part <- dn_inst_part %>%
+        select(year, revision, price_basis, meta.name, meta.disaggregation_group, value, row_id, unit)
+      dout <- dout %>% bind_rows(dn_inst_part)
+    }
+
+  }
+
+  dout
 
 }
 

@@ -126,3 +126,83 @@ cols_breaking_group_uniqueness <- function(d, group_colnames) {
   colnames(max_counts)[max_counts > 1]
 
 }
+
+
+rows_append_distinct_df <- function(dmain, dincre, primary_key) {
+
+  if (!is.data.frame(dmain)) {
+    stop("`dmain` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if (!is.data.frame(dincre)) {
+    stop("`dincre` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if (!is.character(primary_key)) {
+    stop("`primary_key` must be a character vector of column names.", call. = FALSE)
+  }
+
+  if (!all(primary_key %in% names(dmain))) {
+    stop("All `primary_key` columns must exist in `dmain`.", call. = FALSE)
+  }
+
+  if (!all(primary_key %in% names(dincre))) {
+    stop("All `primary_key` columns must exist in `dincre`.", call. = FALSE)
+  }
+
+  dincre_excl <- dplyr::anti_join(
+    dincre,
+    dmain,
+    by = primary_key
+  )
+
+  dplyr::bind_rows(
+    dmain,
+    dincre_excl
+  )
+}
+
+
+rows_append_distinct_lst <- function(df_list, primary_key) {
+
+  if (!is.list(df_list)) {
+    stop("Input must be a list of data.frames.", call. = FALSE)
+  }
+
+  if (length(df_list) == 0) {
+    return(tibble::tibble())
+  }
+
+  purrr::reduce(
+    df_list,
+    function(dmain, dincre) {
+      rows_append_distinct_df(dmain, dincre, primary_key)
+    }
+  )
+}
+
+
+rows_append_distinct <- function(dmain, dincre = NULL, primary_key) {
+
+  if (is.list(dmain) && is.null(dincre)) {
+
+    return(
+      rows_append_distinct_lst(
+        df_list = dmain,
+        primary_key = primary_key
+      )
+    )
+
+  } else {
+
+    return(
+      rows_append_distinct_df(
+        dmain = dmain,
+        dincre = dincre,
+        primary_key = primary_key
+      )
+    )
+
+  }
+}
+

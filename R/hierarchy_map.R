@@ -117,12 +117,25 @@ hmap_get_stats <- function(hmap){
 
 }
 
-hmap_which_disaggregation_group <- function(meta_names, hmap){
+# Here disaggregation_group and disaggregation_layers are same thing, just
+# different naming. We can use either of them.
+hmap_which_disaggregation_group <- function(meta_names, hmap, return_covs = FALSE){
+  if(NROW(hmap)==0){
+    return(NA_character_)
+  }
   meta_names <- unique(meta_names)
-  hmvec <- hmap %>% map_dbl(function(.x){length(intersect(.x, meta_names))/length(.x)})
+  hmvec <- hmap %>% map_dbl(function(.x){
+    length(intersect(.x, meta_names))/length(unique(.x))
+  })
   if(max(hmvec) == 0){
     return(NA_character_)
   }
+  if(return_covs) return(hmvec[hmvec>0])
   which(hmvec==max(hmvec)) %>% names
 }
 
+
+# tdl = tdf long
+hmap_add <- function(tdl,  new_hmap){
+
+}
