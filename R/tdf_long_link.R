@@ -53,7 +53,7 @@ tdf_long_temporal_link <- function(tdl1 , tdl2){
 
 }
 
-liked_tdf_long_implied_figures <- function(linked_tdl){
+linked_tdf_long_implied_figures <- function(linked_tdl){
 
   hf <- linked_tdl$high_freq$data
   lf <- linked_tdl$low_freq$data
@@ -176,7 +176,28 @@ liked_tdf_long_implied_figures <- function(linked_tdl){
 
 }
 
-liked_tdf_long_tally <- function(linked_tdl) {
+linked_tdf_long_tally <- function(linked_tdl) {
+
+  high_freq <- frequency.tdf_long(linked_tdl$high_freq)
+  low_freq <- frequency.tdf_long(linked_tdl$low_freq)
+
+  from_high_to_low <- aggregate_temporal(linked_tdl$high_freq, to_freq = low_freq)
+
+  common <- from_high_to_low$data %>%
+    select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group, value.level) %>%
+    inner_join(
+      linked_tdl$low_freq$data %>%
+        select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group, value.level) ,
+      by = c("time", "meta.release_tag", "meta.price_basis",
+             "meta.name", "meta.disaggregation_group"),
+      suffix = c("_from_high", "_from_low")
+    )
+
+  common <- common %>%
+    mutate(
+      value.level_ratio = value.level_from_high / value.level_from_low,
+      value.divergence = (value.level_ratio - 1) %>% abs() %>% round(2))
+
 
 }
 

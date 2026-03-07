@@ -128,8 +128,8 @@ calculate_standard_measures <- function(tdl){
              meta.disaggregation_group,
              meta.parent, meta.parent_disaggregation_group) %>%
     mutate(
-      value.contribution_growth_rate_pct = value.contribution_growth_rate * sum(value.contribution_growth_rate, na.rm = TRUE)*100,
-      value.contribution_momentum_pct = value.contribution_momentum * sum(value.contribution_momentum, na.rm = TRUE)*100
+      value.contribution_growth_rate_pct = value.contribution_growth_rate / sum(value.contribution_growth_rate, na.rm = TRUE)*100,
+      value.contribution_momentum_pct = value.contribution_momentum / sum(value.contribution_momentum, na.rm = TRUE)*100
     )
 
   # Temporal Side Measure (Contribution in Annual)
@@ -162,7 +162,7 @@ calculate_standard_measures <- function(tdl){
   dat_defl <- dat_orig %>%
     select(all_of(this_allowed_cols)) %>%
     mutate(
-      meta.price_basis = meta.price_basis %>% str_clean()
+      meta.price_basis = meta.price_basis %>% tolower()
     ) %>%
     mutate(
       meta.is_real = meta.price_basis %>% str_detect("real"),

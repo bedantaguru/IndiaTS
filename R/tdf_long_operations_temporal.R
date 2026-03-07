@@ -46,16 +46,6 @@ aggregate_temporal <- function(tdl, to_freq){
       time = time_conversion_fn(time_old)
     )
 
-  chk <- dat %>%
-    group_by(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) %>%
-    cols_causing_group_variation()
-
-  chk2 <- ("time_old" %in% chk) && (!any(stringr::str_detect( chk, "^meta\\.")))
-
-  if(!chk2){
-    stop("There are multiple rows for some combinations of primary key type columns.", call. = FALSE)
-  }
-
   time_agg_fn <- sum
 
   # if it exsis "meta.temporal_accumulation_rule"
@@ -91,4 +81,38 @@ aggregate_temporal <- function(tdl, to_freq){
   tdl
 
 
+}
+
+
+freq_info_for_two_freqs <- function(freq1, freq2){
+
+  known_fq_dat <- tibble::tibble(
+    known_fqs = c("month", "quarter", "halfyear", "year"),
+    units = c(12,4,2,1)
+  )
+
+  rnk1 <- which(known_fq_dat$known_fqs==freq1)
+  rnk2 <- which(known_fq_dat$known_fqs==freq2)
+
+  unit1 <- known_fq_dat$units[rnk1]
+  unit2 <- known_fq_dat$units[rnk2]
+
+  lo <- list()
+
+  lo$first <- freq1
+  lo$second <- freq2
+
+  lo$first_more_aggregated_than_second <- rnk1 > rnk2
+
+  lo$unit_first <- unit1
+
+  lo$unit_second <- unit2
+
+  lo$low_freq <- if(lo$first_more_aggregated_than_second) freq1 else freq2
+
+  lo$high_freq <- if(lo$first_more_aggregated_than_second) freq2 else freq1
+
+  lo$high_to_low_ratio <- if(lo$first_more_aggregated_than_second) unit2/unit1 else unit1/unit2
+
+  lo
 }
