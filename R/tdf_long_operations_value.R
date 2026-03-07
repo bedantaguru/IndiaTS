@@ -132,6 +132,19 @@ calculate_standard_measures <- function(tdl){
       value.contribution_momentum_pct = value.contribution_momentum * sum(value.contribution_momentum, na.rm = TRUE)*100
     )
 
+  # Temporal Side Measure (Contribution in Annual)
+
+   dat <- dat %>%
+     mutate(time_year = fiscal_year(time))  %>%
+     group_by(time_year, meta.release_tag, meta.price_basis,
+              meta.name, meta.disaggregation_group) %>%
+     mutate(
+       value.annual_contribution = value.level / sum(value.level, na.rm = TRUE)*100
+     ) %>%
+     ungroup() %>%
+     select(-time_year)
+
+
   # Remove intermediate time_prev_period and time_prev_year columns
   dat <- dat %>% select(-time_prev_period, -time_prev_year)
 

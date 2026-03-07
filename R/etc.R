@@ -81,7 +81,7 @@ get_extdata_path <- function(file) {
 
 
 
-cols_breaking_group_uniqueness <- function(d, group_colnames) {
+cols_causing_group_variation <- function(d, group_colnames) {
 
   if (!inherits(d, "data.frame")) {
     stop("`d` must be a data.frame or tibble.")

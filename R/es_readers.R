@@ -45,7 +45,7 @@ es_convert_gva_proc1_part <- function(dn, hmap){
     }
 
     chk <- dn_ind %>% group_by(industry, price_basis) %>%
-      cols_breaking_group_uniqueness()
+      cols_causing_group_variation()
 
     if(length(chk)>0) {
       stop(
@@ -327,7 +327,7 @@ es_convert_gva_common <- function(
   key_cols <- c("base_year", "year", "quarter", "revision", cat_cols)
   key_cols_this <- intersect(key_cols, colnames(d_final))
 
-  chk <- d_final %>% cols_breaking_group_uniqueness(group_colnames = key_cols_this)
+  chk <- d_final %>% cols_causing_group_variation(group_colnames = key_cols_this)
 
   if(length(chk) > 0) {
     stop("There are columns that have multiple values for the same combination of key columns:",

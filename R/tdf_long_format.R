@@ -93,7 +93,7 @@ tdf_long_release_tag_task <- function(dat, add_latest = FALSE){
 
     chk2 <- dat2 %>%
       group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
-      cols_breaking_group_uniqueness()
+      cols_causing_group_variation()
 
     if(length(chk2) > 0){
       stop(
