@@ -524,7 +524,6 @@ es_convert_gva_annual <- function(dat, hmap) {
 #'   `meta.price_basis`, `meta.unit`, `meta.name`, `meta.disaggregation_group`,
 #'   and `value.level`.
 #' @export
-es_convert_gva <- function(dat, hmap, freq) { ... }
 es_convert_gva <- function(dat, hmap, freq){
   if (missing(hmap) || is.null(hmap)) {
     hmap <- es_load_predefined_data("hmap_gva")
