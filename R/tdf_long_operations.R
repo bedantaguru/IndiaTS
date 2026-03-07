@@ -1,9 +1,4 @@
 
-# TODO DEL it
-# td0 <- read_rds("tests/testthat/testdata/qtr_base_rev_gva.rds") %>% es_convert_gva_annual() %>% tdf_long_make()
-
-
-
 calculate_standard_measures <- function(tdl){
   # Calculate:
 
