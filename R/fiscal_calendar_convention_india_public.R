@@ -138,7 +138,7 @@ fiscal_month <- function(x, with_year = TRUE){
 #'
 #' @export
 fiscal_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = TRUE){
-  if(is_date_type(x)){
+  if(is_date_type(x) || inherits(x,"fiscal_period")){
     res <- fiscal_quarter_for_date(as.Date(x), with_year = with_year)
   } else {
     if (inherits(x , calendar_period_class[1])) {
@@ -226,6 +226,77 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_fiscal_quarter = 
 
 
 
+#' Extract Indian fiscal Half-Year
+#'
+#' Determines the Indian fiscal half-year corresponding to a date or a
+#' textual representation of a fiscal reporting period.
+#'
+#' The Indian fiscal year follows the April–March convention:
+#' \itemize{
+#'   \item H1: April–September
+#'   \item H2: October–March
+#' }
+#'
+#' For character inputs, the function recognises half-year labels
+#' (e.g. \code{H1}, \code{H2}), month ranges (e.g. \code{Apr-Sep},
+#' \code{October to March}), and fiscal year formats such as
+#' \code{FY24}, \code{FY2024}, or \code{2023-24}.
+#'
+#' A full half-year–fiscal-year label is returned only when both components
+#' can be identified. Invalid or unrelated text results in \code{NA}.
+#'
+#' @param x A vector representing time. Can be a date-like object
+#'   (\code{Date}, \code{POSIXct}) or a character vector describing a
+#'   fiscal half-year, month range, or fiscal year.
+#'
+#' @param with_year Logical. If \code{TRUE} (default), the fiscal year
+#'   is included in the output when available. If \code{FALSE}, only
+#'   the half-year identifier is returned.
+#'
+#' @return A character vector of fiscal half-year labels.
+#'   Possible values include \code{"H1:2024-25"}, \code{"H2"}, or \code{NA}.
+#'
+#' @examples
+#' ## Date inputs
+#' fiscal_halfyear(as.Date("2024-06-30"))
+#' fiscal_halfyear(as.Date("2025-02-10"), with_year = FALSE)
+#'
+#' ## Character inputs with half-year labels
+#' fiscal_halfyear("H1 FY2024")
+#' fiscal_halfyear("h2 2022-23")
+#'
+#' ## Month-range based inputs
+#' fiscal_halfyear("Apr-Sep FY24")
+#' fiscal_halfyear("October to March 2023-24")
+#'
+#' ## Mixed real-world inputs
+#' x <- c(
+#'   "H1 FY2024",
+#'   "Apr-Sep 2023-24",
+#'   "October to March FY2022",
+#'   "random note"
+#' )
+#' fiscal_halfyear(x)
+#'
+#' @seealso
+#' \code{\link{fiscal_quarter}},
+#' \code{\link{fiscal_year}}
+#'
+#' @export
+fiscal_halfyear <- function(x, with_year = TRUE){
+  if(is_date_type(x) || inherits(x,"fiscal_period")){
+    res <- fiscal_halfyear_for_date(as.Date(x), with_year = with_year)
+  } else {
+    if(is.character(x)){
+      res <- fiscal_halfyear_for_txt(x, with_year = with_year)
+    } else {
+      stop("Input must be either a date or character vector.", call. = FALSE)
+    }
+  }
+  class(res) <- fiscal_period_class
+  res
+}
+
 
 
 
@@ -284,7 +355,7 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_fiscal_quarter = 
 #'
 #' @export
 fiscal_year <- function(x){
-  if(is_date_type(x)){
+  if(is_date_type(x) || inherits(x,"fiscal_period")){
     res <- fiscal_year_for_date(as.Date(x))
   } else {
     if(is.character(x)){
