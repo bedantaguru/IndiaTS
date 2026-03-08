@@ -1215,15 +1215,9 @@ unique.fiscal_period <- function(x, ...) {
     stop("Cannot get unique values from fiscal_period vector with mixed frequencies.", call. = FALSE)
   }
 
-  x_dt <- as.Date(x, anchor = "mid")
+  keep <- !duplicated(as.character(x))
 
-  keep <- !duplicated(x_dt)
-
-  res <- as_fiscal_period_for_date(x_dt[keep])
-
-  class(res) <- fiscal_period_class
-
-  res
+  x[keep]
 }
 
 
@@ -1253,15 +1247,9 @@ unique.calendar_period <- function(x, ...) {
     stop("Cannot get unique values from calendar_period vector with mixed frequencies.", call. = FALSE)
   }
 
-  x_dt <- as.Date(x, anchor = "mid")
+  keep <- !duplicated(as.character(x))
 
-  keep <- !duplicated(x_dt)
-
-  res <- as_calendar_period_for_date(x_dt[keep])
-
-  class(res) <- calendar_period_class
-
-  res
+  x[keep]
 }
 
 
@@ -1400,12 +1388,10 @@ Ops.fiscal_period <- function(e1, e2) {
 
   op <- .Generic
 
-  # Unray operations is not required
-  # if (missing(e2)) {
-  #   if (op == "+") return(next_period(e1))
-  #   if (op == "-") return(previous_period(e1))
-  #   stop("Unsupported unary operation for fiscal_period.", call. = FALSE)
-  # }
+  # For all non-arithmetic operators behave like character
+  if (!(op %in% c("+", "-"))) {
+    return(do.call(op, list(as.character(e1), as.character(e2))))
+  }
 
   e1_is_period <- inherits(e1, fiscal_period_class[1])
   e2_is_period <- inherits(e2, fiscal_period_class[1])
@@ -1434,10 +1420,6 @@ Ops.fiscal_period <- function(e1, e2) {
 
   if (!period_first && op == "-") {
     stop("numeric - fiscal_period is not supported.", call. = FALSE)
-  }
-
-  if (!(op %in% c("+", "-"))) {
-    stop("Only '+' and '-' are supported for fiscal_period arithmetic.", call. = FALSE)
   }
 
   # numeric validation
@@ -1515,9 +1497,15 @@ Ops.fiscal_period <- function(e1, e2) {
 
 
 #' @export
+#' @export
 Ops.calendar_period <- function(e1, e2) {
 
   op <- .Generic
+
+  # For all non-arithmetic operators behave like character
+  if (!(op %in% c("+", "-"))) {
+    return(do.call(op, list(as.character(e1), as.character(e2))))
+  }
 
   e1_is_period <- inherits(e1, calendar_period_class[1])
   e2_is_period <- inherits(e2, calendar_period_class[1])
@@ -1546,10 +1534,6 @@ Ops.calendar_period <- function(e1, e2) {
 
   if (!period_first && op == "-") {
     stop("numeric - calendar_period is not supported.", call. = FALSE)
-  }
-
-  if (!(op %in% c("+", "-"))) {
-    stop("Only '+' and '-' are supported for calendar_period arithmetic.", call. = FALSE)
   }
 
   # numeric validation
@@ -1624,7 +1608,6 @@ Ops.calendar_period <- function(e1, e2) {
 
   res
 }
-
 
 
 #' @export
