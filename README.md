@@ -1,11 +1,5 @@
 # IndiaTS
 
-```{=html}
-<!-- badges: start -->
-```
-```{=html}
-<!-- badges: end -->
-```
 The goal of **IndiaTS** is to provide tools for cleaning, transforming,
 and standardising Indian statistical datasets into a consistent
 long-format time series structure. It includes utilities for working
