@@ -1203,6 +1203,8 @@ sort.fiscal_period <- function(x, decreasing = FALSE, ...) {
 
   res <- as_fiscal_period_for_date(x_dt[ord])
 
+  class(res) <- fiscal_period_class
+
   res
 }
 
@@ -1218,6 +1220,8 @@ unique.fiscal_period <- function(x, ...) {
   keep <- !duplicated(x_dt)
 
   res <- as_fiscal_period_for_date(x_dt[keep])
+
+  class(res) <- fiscal_period_class
 
   res
 }
@@ -1236,6 +1240,8 @@ sort.calendar_period <- function(x, decreasing = FALSE, ...) {
 
   res <- as_calendar_period_for_date(x_dt[ord])
 
+  class(res) <- calendar_period_class
+
   res
 }
 
@@ -1252,6 +1258,137 @@ unique.calendar_period <- function(x, ...) {
   keep <- !duplicated(x_dt)
 
   res <- as_calendar_period_for_date(x_dt[keep])
+
+  class(res) <- calendar_period_class
+
+  res
+}
+
+
+
+#' @export
+min.fiscal_period <- function(..., na.rm = FALSE) {
+
+  args <- list(...)
+
+  if(length(args) == 1) {
+    x <- args[[1]]
+  } else {
+    if(!all(vapply(args, inherits, logical(1), fiscal_period_class[1]))) {
+      stop("All arguments must be fiscal_period.", call. = FALSE)
+    }
+    x <- do.call(c, args) %>% as_fiscal_period()
+  }
+
+  if(frequency.fiscal_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot compute min for fiscal_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  x[which.min(x_dt)]
+}
+
+#' @export
+max.fiscal_period <- function(..., na.rm = FALSE) {
+
+  args <- list(...)
+
+  if(length(args) == 1) {
+    x <- args[[1]]
+  } else {
+    if(!all(vapply(args, inherits, logical(1), fiscal_period_class[1]))) {
+      stop("All arguments must be fiscal_period.", call. = FALSE)
+    }
+    x <- do.call(c, args) %>% as_fiscal_period()
+  }
+
+  if(frequency.fiscal_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot compute max for fiscal_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  x[which.max(x_dt)]
+}
+
+
+#' @export
+min.calendar_period <- function(..., na.rm = FALSE) {
+
+  args <- list(...)
+
+  if(length(args) == 1) {
+    x <- args[[1]]
+  } else {
+    if(!all(vapply(args, inherits, logical(1), calendar_period_class[1]))) {
+      stop("All arguments must be calendar_period.", call. = FALSE)
+    }
+    x <- do.call(c, args) %>% as_calendar_period()
+  }
+
+  if(frequency.calendar_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot compute min for calendar_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  x[which.min(x_dt)]
+}
+
+
+#' @export
+max.calendar_period <- function(..., na.rm = FALSE) {
+
+  args <- list(...)
+
+  if(length(args) == 1) {
+    x <- args[[1]]
+  } else {
+    if(!all(vapply(args, inherits, logical(1), calendar_period_class[1]))) {
+      stop("All arguments must be calendar_period.", call. = FALSE)
+    }
+    x <- do.call(c, args) %>% as_calendar_period()
+  }
+
+  if(frequency.calendar_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot compute max for calendar_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  x[which.max(x_dt)]
+}
+
+
+#' @export
+c.fiscal_period <- function(..., recursive = FALSE) {
+
+  args <- list(...)
+
+  if(!all(vapply(args, inherits, logical(1), fiscal_period_class[1]))) {
+    stop("All arguments must be fiscal_period.", call. = FALSE)
+  }
+
+  res <- unlist(args, use.names = FALSE)
+
+  class(res) <- fiscal_period_class
+
+  res
+}
+
+#' @export
+c.calendar_period <- function(..., recursive = FALSE) {
+
+  args <- list(...)
+
+  if(!all(vapply(args, inherits, logical(1), calendar_period_class[1]))) {
+    stop("All arguments must be calendar_period.", call. = FALSE)
+  }
+
+  res <- unlist(args, use.names = FALSE)
+
+  class(res) <- calendar_period_class
 
   res
 }

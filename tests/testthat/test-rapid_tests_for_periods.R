@@ -478,3 +478,32 @@ test_that("mixed-frequency periods are not continuous", {
   expect_false(is_continuous(x))
 })
 
+
+test_that("pipeline fiscal conversions across months and years work correctly", {
+
+  expect_identical(
+    as.character(as_fiscal_period("jan 2015") %>% fiscal_quarter()),
+    "Q4:2014-15"
+  )
+
+  expect_identical(
+    as.character(as_fiscal_period("aug 2018") %>% fiscal_quarter()),
+    "Q2:2018-19"
+  )
+
+  expect_identical(
+    as.character(as_fiscal_period("nov 2020") %>% fiscal_quarter() %>% fiscal_halfyear()),
+    "H2:2020-21"
+  )
+
+  expect_identical(
+    as.character(as_fiscal_period("feb 2019") %>% fiscal_quarter() %>% fiscal_halfyear() %>% fiscal_year()),
+    "2018-19"
+  )
+
+  expect_identical(
+    as.character(as_fiscal_period("apr 2022") %>% fiscal_quarter()),
+    "Q1:2022-23"
+  )
+
+})

@@ -849,7 +849,7 @@ previous_period_for_calendar_period <- function(
     cp,
     lag_len = c("month" = 30, "quarter" = 90, "year" = 365),
     sign = -1
-    ) {
+) {
 
   cp_date <- as.Date.calendar_period(cp, anchor = "mid")
 
@@ -1132,5 +1132,148 @@ as_calendar_period_for_fiscal_period <- function(x, with_year = TRUE) {
 }
 
 
+freq_info_for_one_freq <- function(freq){
+
+  not_impl_fn <- function(x, with_year = TRUE) { stop("not implemented") }
+
+  known_fq_dat <- tibble::tibble(
+    known_fqs = c("month", "quarter", "halfyear", "year"),
+    units = c(12,4,2,1),
+    converters = list(
+      fiscal_month,
+      fiscal_quarter,
+      fiscal_halfyear,
+      function(x, with_year = TRUE) fiscal_year(x))
+    # As calendar period is not required or focsus much its kept in case to be done later
+    # converters_fiscal = list(
+    #   fiscal_month,
+    #   fiscal_quarter,
+    #   fiscal_halfyear,
+    #   function(x, with_year = TRUE) fiscal_year(x)),
+    # converters_calendar = list(
+    #   fiscal_month,
+    #   calendar_quarter,
+    #   not_impl_fn,
+    #   not_impl_fn)
+  )
+
+  rnk <- which(known_fq_dat$known_fqs==freq)
+
+  if(length(rnk) == 0) {
+    stop(
+      "Unknown frequency: ", freq,
+      ". Supported frequencies are: month, quarter, halfyear, year.", call. = FALSE)
+  }
+
+  list(
+    rank = rnk,
+    unit = known_fq_dat$units[rnk],
+    converter = known_fq_dat$converters[[rnk]]
+  )
+
+}
+
+freq_info_for_two_freqs <- function(freq1, freq2){
+
+  fi1 <- freq_info_for_one_freq(freq1)
+  fi2 <- freq_info_for_one_freq(freq2)
+
+  rnk1 <- fi1$rank
+  rnk2 <- fi2$rank
+
+  unit1 <- fi1$unit
+  unit2 <- fi2$unit
+
+  lo <- list()
+
+  lo$first_more_aggregated_than_second <- rnk1 > rnk2
+
+  lo$low_freq  <- if (lo$first_more_aggregated_than_second) freq1 else freq2
+  lo$high_freq <- if (lo$first_more_aggregated_than_second) freq2 else freq1
+
+  lo$low_freq_info <- if (lo$first_more_aggregated_than_second) fi1 else fi2
+  lo$high_freq_info <- if (lo$first_more_aggregated_than_second) fi2 else fi1
+
+  lo$high_to_low_ratio <- if (lo$first_more_aggregated_than_second) {
+    unit2 / unit1
+  } else {
+    unit1 / unit2
+  }
+
+  lo
+}
+
+
+# Expands the observed period vector `tp` to a complete sequence between its
+# benchmarked min and max coverage. The benchmark frequency (`freq`) is used
+# to determine the coverage window, while the output frequency remains that
+# of `tp`.
+
+complete_time_sequence_from_benchmark_txt <- function(tp, freq){
+
+  fix <- freq_info_for_one_freq(frequency(tp, singular = TRUE))
+  fiy <- freq_info_for_one_freq(freq)
+
+  tpu <- unique(tp)
+  tpcov <- fiy$converter(tpu)
+
+  all_in_dates <- c(as.Date(tpcov), as.Date(tpu))
+
+
+  dt_seq <- seq.Date(from = min(all_in_dates), to = max(all_in_dates), by = 27)
+
+  all_possibles <- tibble::tibble(
+    dt = dt_seq,
+    x = fix$converter(dt_seq),
+    y = fiy$converter(dt_seq)
+  )
+
+  all_possibles <- all_possibles %>% dplyr::select(x, y) %>% dplyr::distinct()
+
+  all_possibles
+}
+
+
+complete_time_sequence_from_benchmark_tp <- function(tp, tp_y){
+
+  fix <- freq_info_for_one_freq(frequency(tp, singular = TRUE))
+  fiy <- freq_info_for_one_freq(frequency(tp_y, singular = TRUE))
+
+  tpu <- unique(tp)
+  tpcov <- fiy$converter(tpu)
+
+  tp_yu <- unique(tp_y)
+  tp_ycov <- fix$converter(tp_yu)
+
+  all_in_dates <- c(as.Date(tpcov), as.Date(tpu),
+                    as.Date(tp_ycov), as.Date(tp_yu))
+
+
+  dt_seq <- seq.Date(from = min(all_in_dates), to = max(all_in_dates), by = 27)
+
+  all_possibles <- tibble::tibble(
+    dt = dt_seq,
+    x = fix$converter(dt_seq),
+    y = fiy$converter(dt_seq)
+  )
+
+  all_possibles <- all_possibles %>% dplyr::select(x, y) %>% dplyr::distinct()
+
+  all_possibles
+}
+
+
+# Final Dispatch function
+complete_time_sequence_from_benchmark <- function(x, y){
+
+  if(is_period_type(y)){
+    complete_time_sequence_from_benchmark_tp(x, y)
+  } else if(is.character(y)){
+    complete_time_sequence_from_benchmark_txt(x, y)
+  } else {
+    stop("Unsupported type for benchmark: ", class(y), call. = FALSE)
+  }
+
+}
 
 
