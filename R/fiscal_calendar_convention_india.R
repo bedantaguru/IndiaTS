@@ -814,7 +814,8 @@ previous_period_for_fiscal_period <- function(
       "quarter" = 90,
       "halfyear" = 182,
       "year" = 365
-    )
+    ),
+    sign = -1
 ) {
 
   fp_date <- as.Date.fiscal_period(fp, anchor = "mid")
@@ -829,7 +830,7 @@ previous_period_for_fiscal_period <- function(
     TRUE ~ NA_real_
   )
 
-  this_dates <- fp_date - days_to_subtract
+  this_dates <- fp_date + sign * days_to_subtract
 
   out <- dplyr::case_when(
     fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
@@ -844,7 +845,11 @@ previous_period_for_fiscal_period <- function(
   out
 }
 
-previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "quarter" = 90, "year" = 365)) {
+previous_period_for_calendar_period <- function(
+    cp,
+    lag_len = c("month" = 30, "quarter" = 90, "year" = 365),
+    sign = -1
+    ) {
 
   cp_date <- as.Date.calendar_period(cp, anchor = "mid")
 
@@ -857,7 +862,7 @@ previous_period_for_calendar_period <- function(cp, lag_len = c("month" = 30, "q
     TRUE ~ NA_real_
   )
 
-  this_dates <- cp_date - days_to_subtract
+  this_dates <- cp_date + sign * days_to_subtract
 
   out <- dplyr::case_when(
     fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),

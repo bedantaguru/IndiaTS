@@ -59,7 +59,7 @@ test_that("ts -> tdf -> ts round-trip preserves structure and values", {
     original_ts <- ts_list[[nm]]
 
     capture_output(tdf_obj   <- as_tdf(original_ts))
-    rebuilt_ts <- to_ts(tdf_obj)
+    rebuilt_ts <- stats::as.ts(tdf_obj)
 
     ## structural integrity
     expect_equal(frequency(rebuilt_ts), frequency(original_ts), info = nm)

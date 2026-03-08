@@ -2,9 +2,12 @@
 % Please edit documentation in R/tdf_public.R
 \name{to_ts}
 \alias{to_ts}
+\alias{as.ts.tdf}
 \title{Convert a tdf object to a base R ts}
 \usage{
 to_ts(tdf_obj)
+
+\method{as.ts}{tdf}(x, ...)
 }
 \arguments{
 \item{tdf_obj}{A \code{tdf} object with a \code{time} column and one or more numeric

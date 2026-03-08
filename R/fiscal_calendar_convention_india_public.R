@@ -925,6 +925,70 @@ previous_period <- function(x) {
 }
 
 
+#' Next period conversion
+#'
+#' Returns the immediately succeeding period of the same frequency for each
+#' element of a fiscal or calendar period vector.
+#'
+#' This is the forward counterpart of \code{\link{previous_period}}.
+#'
+#' For example:
+#' \itemize{
+#'   \item \code{"Q1:2024-25"} becomes \code{"Q2:2024-25"}
+#'   \item \code{"Q4:2023-24"} becomes \code{"Q1:2024-25"}
+#'   \item \code{"Dec:2013"} becomes \code{"Jan:2014"}
+#' }
+#'
+#' @param x A character vector of class \code{fiscal_period} or
+#'   \code{calendar_period}.
+#'
+#' @return
+#' A character vector of the same length and class as \code{x}, containing the
+#' immediately succeeding periods.
+#'
+#' @examples
+#' x <- as_fiscal_period(c("Jan:2014", "Feb:2014"))
+#' next_period(x)
+#'
+#' q <- as_fiscal_period("Q4:2023-24")
+#' next_period(q)
+#'
+#' y <- as_calendar_period(c("2022", "2023"))
+#' next_period(y)
+#'
+#' @seealso
+#' \code{\link{previous_period}}
+#'
+#' @export
+next_period <- function(x) {
+
+  if (inherits(x, fiscal_period_class[1])) {
+
+    res <- previous_period_for_fiscal_period(
+      x,
+      sign = +1
+    )
+
+  } else if (inherits(x, calendar_period_class[1])) {
+
+    res <- previous_period_for_calendar_period(
+      x,
+      sign = +1
+    )
+
+  } else {
+
+    stop(
+      "Input must be either a fiscal_period or calendar_period vector.",
+      call. = FALSE
+    )
+  }
+
+  res
+}
+
+
+
 #' Previous year conversion
 #'
 #' Returns the period corresponding to the same frequency in the previous year
@@ -977,6 +1041,76 @@ previous_year <- function(x) {
   } else {
     stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)
   }
+  res
+}
+
+
+#' Next year conversion
+#'
+#' Returns the period corresponding to the same frequency in the next year
+#' for each element of a fiscal or calendar period vector.
+#'
+#' This is the forward counterpart of \code{\link{previous_year}}.
+#'
+#' For example:
+#' \itemize{
+#'   \item \code{"Jan:2014"} becomes \code{"Jan:2015"}
+#'   \item \code{"Q2:2024-25"} becomes \code{"Q2:2025-26"}
+#'   \item \code{"2023"} becomes \code{"2024"}
+#' }
+#'
+#' Internally, this is implemented by shifting the underlying date
+#' representation forward by one year (365 days) and re-mapping it back
+#' to the appropriate period format.
+#'
+#' @param x A character vector of class \code{fiscal_period} or
+#'   \code{calendar_period}.
+#'
+#' @return
+#' A character vector of the same length and class as \code{x}, containing the
+#' corresponding periods from the next year.
+#'
+#' @examples
+#' x <- as_fiscal_period(c("Jan:2014", "Feb:2014"))
+#' next_year(x)
+#'
+#' q <- as_fiscal_period("Q3:2024-25")
+#' next_year(q)
+#'
+#' y <- as_calendar_period(c("2022", "2023"))
+#' next_year(y)
+#'
+#' @seealso
+#' \code{\link{previous_year}}
+#'
+#' @export
+next_year <- function(x) {
+
+  if (inherits(x, fiscal_period_class[1])) {
+
+    res <- previous_period_for_fiscal_period(
+      x,
+      lag_len = c("month" = 365, "quarter" = 365, "halfyear" = 365, "year" = 365),
+      sign = +1
+    )
+
+  } else if (inherits(x, calendar_period_class[1])) {
+
+    res <- previous_period_for_calendar_period(
+      x,
+      lag_len = c("month" = 365, "quarter" = 365, "year" = 365),
+      sign = +1
+    )
+
+  } else {
+
+    stop(
+      "Input must be either a fiscal_period or calendar_period vector.",
+      call. = FALSE
+    )
+
+  }
+
   res
 }
 
@@ -1051,3 +1185,322 @@ is_continuous <- function(fp) {
 
 }
 
+
+
+
+############ Basic Operations on Fiscal and Calender Period ################
+
+#' @export
+sort.fiscal_period <- function(x, decreasing = FALSE, ...) {
+
+  if(frequency.fiscal_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot sort fiscal_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  ord <- order(x_dt, decreasing = decreasing)
+
+  res <- as_fiscal_period_for_date(x_dt[ord])
+
+  res
+}
+
+#' @export
+unique.fiscal_period <- function(x, ...) {
+
+  if(frequency.fiscal_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot get unique values from fiscal_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  keep <- !duplicated(x_dt)
+
+  res <- as_fiscal_period_for_date(x_dt[keep])
+
+  res
+}
+
+
+#' @export
+sort.calendar_period <- function(x, decreasing = FALSE, ...) {
+
+  if(frequency.calendar_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot sort calendar_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  ord <- order(x_dt, decreasing = decreasing)
+
+  res <- as_calendar_period_for_date(x_dt[ord])
+
+  res
+}
+
+
+#' @export
+unique.calendar_period <- function(x, ...) {
+
+  if(frequency.calendar_period(x, singular = TRUE) == "mixed") {
+    stop("Cannot get unique values from calendar_period vector with mixed frequencies.", call. = FALSE)
+  }
+
+  x_dt <- as.Date(x, anchor = "mid")
+
+  keep <- !duplicated(x_dt)
+
+  res <- as_calendar_period_for_date(x_dt[keep])
+
+  res
+}
+
+
+
+#' @export
+Ops.fiscal_period <- function(e1, e2) {
+
+  op <- .Generic
+
+  # Unray operations is not required
+  # if (missing(e2)) {
+  #   if (op == "+") return(next_period(e1))
+  #   if (op == "-") return(previous_period(e1))
+  #   stop("Unsupported unary operation for fiscal_period.", call. = FALSE)
+  # }
+
+  e1_is_period <- inherits(e1, fiscal_period_class[1])
+  e2_is_period <- inherits(e2, fiscal_period_class[1])
+
+  e1_is_num <- is.numeric(e1)
+  e2_is_num <- is.numeric(e2)
+
+  if (e1_is_period && e2_is_period) {
+    stop("Operation between two fiscal_period objects is not supported.", call. = FALSE)
+  }
+
+  if (!((e1_is_period && e2_is_num) || (e2_is_period && e1_is_num))) {
+    stop("One operand must be a fiscal_period and the other must be numeric.", call. = FALSE)
+  }
+
+  # determine canonical sides
+  if (e1_is_period) {
+    period_vec <- e1
+    num_vec <- e2
+    period_first <- TRUE
+  } else {
+    period_vec <- e2
+    num_vec <- e1
+    period_first <- FALSE
+  }
+
+  if (!period_first && op == "-") {
+    stop("numeric - fiscal_period is not supported.", call. = FALSE)
+  }
+
+  if (!(op %in% c("+", "-"))) {
+    stop("Only '+' and '-' are supported for fiscal_period arithmetic.", call. = FALSE)
+  }
+
+  # numeric validation
+  if (any(is.na(num_vec))) {
+    stop("NA shift amounts not supported.", call. = FALSE)
+  }
+
+  if (any(abs(num_vec - round(num_vec)) > .Machine$double.eps^0.5)) {
+    stop("Fractional shifts are not allowed.", call. = FALSE)
+  }
+
+  num_vec <- as.integer(num_vec)
+
+  # optimize for common case of scalar shift
+  if(length(unique(num_vec))==1) num_vec <- num_vec[1]
+
+  n_period <- length(period_vec)
+  n_num <- length(num_vec)
+
+  # strict length rule (no arbitrary recycling)
+  if (!(n_num == 1 || n_num == n_period)) {
+    stop("Numeric operand must be length 1 (scalar) or same length as fiscal_period.", call. = FALSE)
+  }
+
+  # determine shift direction
+  if (op == "-") {
+    num_vec <- (-1) * num_vec
+  }
+
+  res <- period_vec
+
+  # ---------- Fast path : scalar shift ----------
+  if (n_num == 1) {
+
+    k <- num_vec
+
+    if (k > 0) {
+      for (i in seq_len(k)) {
+        res <- next_period(res)
+      }
+    } else if (k < 0) {
+      for (i in seq_len(abs(k))) {
+        res <- previous_period(res)
+      }
+    }
+
+  } else {
+
+    # ---------- Element-wise case ----------
+    for (i in seq_len(n_period)) {
+
+      k <- num_vec[i]
+
+      tmp <- period_vec[i]
+
+      if (k > 0) {
+        for (j in seq_len(k)) {
+          tmp <- next_period(tmp)
+        }
+      } else if (k < 0) {
+        for (j in seq_len(abs(k))) {
+          tmp <- previous_period(tmp)
+        }
+      }
+
+      res[i] <- tmp
+    }
+
+  }
+
+  class(res) <- class(period_vec)
+
+  res
+}
+
+
+#' @export
+Ops.calendar_period <- function(e1, e2) {
+
+  op <- .Generic
+
+  e1_is_period <- inherits(e1, calendar_period_class[1])
+  e2_is_period <- inherits(e2, calendar_period_class[1])
+
+  e1_is_num <- is.numeric(e1)
+  e2_is_num <- is.numeric(e2)
+
+  if (e1_is_period && e2_is_period) {
+    stop("Operation between two calendar_period objects is not supported.", call. = FALSE)
+  }
+
+  if (!((e1_is_period && e2_is_num) || (e2_is_period && e1_is_num))) {
+    stop("One operand must be a calendar_period and the other must be numeric.", call. = FALSE)
+  }
+
+  # determine canonical sides
+  if (e1_is_period) {
+    period_vec <- e1
+    num_vec <- e2
+    period_first <- TRUE
+  } else {
+    period_vec <- e2
+    num_vec <- e1
+    period_first <- FALSE
+  }
+
+  if (!period_first && op == "-") {
+    stop("numeric - calendar_period is not supported.", call. = FALSE)
+  }
+
+  if (!(op %in% c("+", "-"))) {
+    stop("Only '+' and '-' are supported for calendar_period arithmetic.", call. = FALSE)
+  }
+
+  # numeric validation
+  if (any(is.na(num_vec))) {
+    stop("NA shift amounts not supported.", call. = FALSE)
+  }
+
+  if (any(abs(num_vec - round(num_vec)) > .Machine$double.eps^0.5)) {
+    stop("Fractional shifts are not allowed.", call. = FALSE)
+  }
+
+  num_vec <- as.integer(num_vec)
+
+  # optimize for common case of scalar shift
+  if(length(unique(num_vec)) == 1) num_vec <- num_vec[1]
+
+  n_period <- length(period_vec)
+  n_num <- length(num_vec)
+
+  # strict length rule
+  if (!(n_num == 1 || n_num == n_period)) {
+    stop("Numeric operand must be length 1 (scalar) or same length as calendar_period.", call. = FALSE)
+  }
+
+  # determine shift direction
+  if (op == "-") {
+    num_vec <- (-1) * num_vec
+  }
+
+  res <- period_vec
+
+  # ---------- Fast path : scalar shift ----------
+  if (n_num == 1) {
+
+    k <- num_vec
+
+    if (k > 0) {
+      for (i in seq_len(k)) {
+        res <- next_period(res)
+      }
+    } else if (k < 0) {
+      for (i in seq_len(abs(k))) {
+        res <- previous_period(res)
+      }
+    }
+
+  } else {
+
+    # ---------- Element-wise case ----------
+    for (i in seq_len(n_period)) {
+
+      k <- num_vec[i]
+
+      tmp <- period_vec[i]
+
+      if (k > 0) {
+        for (j in seq_len(k)) {
+          tmp <- next_period(tmp)
+        }
+      } else if (k < 0) {
+        for (j in seq_len(abs(k))) {
+          tmp <- previous_period(tmp)
+        }
+      }
+
+      res[i] <- tmp
+    }
+
+  }
+
+  class(res) <- class(period_vec)
+
+  res
+}
+
+
+
+#' @export
+`[.fiscal_period` <- function(x, i, ...) {
+  res <- NextMethod("[")
+  class(res) <- class(x)
+  res
+}
+
+
+#' @export
+`[.calendar_period` <- function(x, i, ...) {
+  res <- NextMethod("[")
+  class(res) <- class(x)
+  res
+}
