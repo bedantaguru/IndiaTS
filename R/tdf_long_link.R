@@ -79,17 +79,12 @@ linked_tdf_long_implied_figures <- function(linked_tdl){
     return(linked_tdl)
   }
 
-
-
-
   # Keep only high-frequency rows belonging to groups eligible for implied calculation
   for_implied_calc_hf <- hf %>%
     inner_join(
       applicable_for_implied_calculation %>% select(-n),
       by = c("meta.low_freq_time", "meta.release_tag", "meta.price_basis",
              "meta.name", "meta.disaggregation_group"))
-
-
 
   # Generate the complete sequence of expected high-frequency times within each low-frequency benchmark period
   full_grid_time  <- complete_time_sequence_from_benchmark(
@@ -183,7 +178,10 @@ linked_tdf_long_tally <- function(linked_tdl) {
   high_freq <- frequency.tdf_long(linked_tdl$high_freq)
   low_freq <- frequency.tdf_long(linked_tdl$low_freq)
 
-  from_high_to_low <- aggregate_temporal(linked_tdl$high_freq, to_freq = low_freq)
+  from_high_to_low <- aggregate_temporal(
+    linked_tdl$high_freq,
+    to_freq = low_freq,
+    silent = TRUE)
 
   common <- from_high_to_low$data %>%
     select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group, value.level) %>%
@@ -198,8 +196,16 @@ linked_tdf_long_tally <- function(linked_tdl) {
   common <- common %>%
     mutate(
       value.level_ratio = value.level_from_high / value.level_from_low,
-      value.divergence = (value.level_ratio - 1) %>% abs() %>% round(2))
+      value.divergence = (value.level_ratio - 1) %>% abs() %>% round(2)) %>%
+    rename(value.level = value.level_from_low)
 
+  lft <- linked_tdl$low_freq
+
+  tdf_long_check_structure(common, lft$hmap)
+
+  lft$data <- common
+
+  lft
 
 }
 

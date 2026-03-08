@@ -17,6 +17,46 @@ test_that("gva numbers match", {
 
   tdl_a_all <- lt_qa$low_freq %>% aggregate_component()
 
+  new_linked <- tdf_long_temporal_link(tdl_a_all, tdl0)
+
+
+  tally_check <- linked_tdf_long_tally(new_linked)
+
+  expect_message(
+    linked_tdf_long_implied_figures(new_linked),
+    "No implied calculation possible as there are no low frequency"
+  )
+
+  expect_lt(
+    mean(tally_check$data$value.divergence),
+    0.05
+  )
+
+
+  # This should be "2025-26"
+  yr1 <- new_linked$high_freq$data %>% filter(!str_detect(meta.price_basis, "2022-23")) %>% pull(time) %>% max() %>% fiscal_year()
+
+  # This should be "2024-25"
+  yr2 <-tally_check$data %>% filter(!str_detect(meta.price_basis, "2022-23")) %>% pull(time) %>% max()
+
+  expect_equal(
+    yr1-1,
+    yr2
+  )
+
+  expect_true( yr2 == "2024-25")
+
+  # In base revision divergence is reduced
+  expect_gt(
+    tally_check$data %>% filter(!str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean(),
+    tally_check$data %>% filter(str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean()
+  )
+
+  expect_lt(
+    tally_check$data %>% filter(str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean(),
+    0.0001
+  )
+
   expect_message(
     stdm_a <- calculate_standard_measures(tdl_a_all),
     "meta.parent column not found in data"

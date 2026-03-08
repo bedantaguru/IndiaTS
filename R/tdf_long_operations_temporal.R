@@ -1,6 +1,6 @@
 
 
-aggregate_temporal <- function(tdl, to_freq){
+aggregate_temporal <- function(tdl, to_freq, silent = FALSE){
 
   known_fqs <- c("month", "quarter", "halfyear", "year")
 
@@ -12,7 +12,7 @@ aggregate_temporal <- function(tdl, to_freq){
 
   if(length(can_be_aggregated_to)==0){
     warning("Data is already at the annual frequency (the coarsest level). Further temporal reduction/aggregation or disaggregation is not possible.", call. = FALSE)
-    return(NULL)
+    return(invisible(tdl))
   }
 
   if(missing(to_freq)){
@@ -31,19 +31,44 @@ aggregate_temporal <- function(tdl, to_freq){
       call. = FALSE)
   }
 
-  time_conversion_fn <- switch(
-    to_freq,
-    "month" = fiscal_month,
-    "quarter" = fiscal_quarter,
-    "halfyear" = fiscal_halfyear,
-    "year" = fiscal_year)
+  fi_this <- freq_info_for_two_freqs(fq, to_freq)
+
+  time_conversion_fn <- fi_this$low_freq_info$converter
 
   dat <- tdl$data
 
-  dat <- dat %>%
-    rename(time_old = time) %>%
-    dplyr::mutate(
-      time = time_conversion_fn(time_old)
+  dat <- dat %>% mutate(
+    meta.low_freq_time = time_conversion_fn(time)
+  )
+
+  # Check for completeness (init)
+  c_inf <- complete_time_sequence_from_benchmark(
+    dat$time, to_freq
+  )
+
+  colnames(c_inf) <- c("time", "meta.low_freq_time")
+
+  full_grid_part <- dat %>%
+    distinct(meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group)
+
+  full_grid <- dplyr::cross_join(
+    c_inf,
+    full_grid_part
+  )
+
+  # We populate NA in missing high freq points (so that the sum becomes NA)
+  dat_na_populated <- dat %>%
+    full_join(
+      full_grid,
+      by = colnames(full_grid)
+    )
+
+
+  # meta.low_freq_time created earlier
+  dat_na_populated <- dat_na_populated %>%
+    rename(
+      time = meta.low_freq_time,
+      time_old = time
     )
 
   time_agg_fn <- sum
@@ -64,8 +89,7 @@ aggregate_temporal <- function(tdl, to_freq){
 
   }
 
-
-  dat2 <- dat %>%
+  dat2 <- dat_na_populated %>%
     dplyr::group_by(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) %>%
     dplyr::summarise(
       dplyr::across(dplyr::starts_with("value"), time_agg_fn),
@@ -73,13 +97,20 @@ aggregate_temporal <- function(tdl, to_freq){
       .groups = "drop"
     )
 
-  # safety checks
-  tdf_long_check_structure(dat2, hmap = tdl$hmap)
+  # This is very key step. So NA plays a vital role here. na.rm should not be turned on.
+  dat2_no_na <- dat2 %>% filter(!is.na(value.level))
 
-  tdl$data <- dat2
+  if(NROW(dat2_no_na)!=NROW(dat2) && !silent){
+    message("Some primay key combinations has incomplete temporal coverage and ",
+            "hence not considered for aggregation.")
+  }
+
+  # safety checks
+  tdf_long_check_structure(dat2_no_na, hmap = tdl$hmap)
+
+  tdl$data <- dat2_no_na
 
   tdl
-
 
 }
 

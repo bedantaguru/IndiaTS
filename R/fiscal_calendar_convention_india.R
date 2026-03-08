@@ -1217,7 +1217,10 @@ complete_time_sequence_from_benchmark_txt <- function(tp, freq){
   tpu <- unique(tp)
   tpcov <- fiy$converter(tpu)
 
-  all_in_dates <- c(as.Date(tpcov), as.Date(tpu))
+  all_in_dates <- c(as.Date(tpcov, anchor = "last"),
+                    as.Date(tpcov, anchor = "first"),
+                    as.Date(tpu, anchor = "last"),
+                    as.Date(tpu, anchor = "first"))
 
 
   dt_seq <- seq.Date(from = min(all_in_dates), to = max(all_in_dates), by = 27)
@@ -1245,8 +1248,14 @@ complete_time_sequence_from_benchmark_tp <- function(tp, tp_y){
   tp_yu <- unique(tp_y)
   tp_ycov <- fix$converter(tp_yu)
 
-  all_in_dates <- c(as.Date(tpcov), as.Date(tpu),
-                    as.Date(tp_ycov), as.Date(tp_yu))
+  all_in_dates <- c(as.Date(tpcov, anchor = "last"),
+                    as.Date(tpcov, anchor = "first"),
+                    as.Date(tpu, anchor = "last"),
+                    as.Date(tpu, anchor = "first"),
+                    as.Date(tp_ycov, anchor = "last"),
+                    as.Date(tp_ycov, anchor = "first"),
+                    as.Date(tp_yu, anchor = "last"),
+                    as.Date(tp_yu, anchor = "first"))
 
 
   dt_seq <- seq.Date(from = min(all_in_dates), to = max(all_in_dates), by = 27)
