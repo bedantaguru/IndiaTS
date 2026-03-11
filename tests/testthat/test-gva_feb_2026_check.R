@@ -46,10 +46,12 @@ test_that("gva numbers match", {
 
   expect_true( yr2 == "2024-25")
 
-  # In base revision divergence is reduced
-  expect_gt(
-    tally_check$data %>% filter(!str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean(),
-    tally_check$data %>% filter(str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean()
+  chk_val <- abs(tally_check$data %>% filter(!str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean())+
+    abs(tally_check$data %>% filter(str_detect(meta.price_basis, "2022-23")) %>% pull(value.divergence) %>% mean())
+
+  expect_lt(
+    chk_val,
+    0.0001
   )
 
   expect_lt(

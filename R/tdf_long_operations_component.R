@@ -1,33 +1,106 @@
 
 aggregate_component <- function(tdl){
 
+  tdl_now <- tdl
+
+  repeat{
+    agg_part <- aggregate_component_part(tdl_now)
+
+    tdl_now <- agg_part$main_agg
+
+    chk <- check_component_disaggregation_layer_completeness(tdl_now)
+
+    if(!chk$any_missed) break()
+  }
+
+  tdl_now
+
+}
+
+check_component_disaggregation_layer_completeness <- function(tdl){
+
+  dat_this <- tdl$data
+  hmap_this <- tdl$hmap
+
+  hm <- colnames(hmap_this) %>%
+    map(function(cn) {
+      hmap_this[cn] %>%
+        distinct %>%
+        purrr::set_names("meta.name") %>%
+        mutate(meta.disaggregation_group = cn)
+    }) %>%
+    bind_rows()
+
+  hma <- hm %>%
+    group_by(meta.disaggregation_group) %>%
+    summarise(n_names = n_distinct(meta.name), .groups = "drop")
+
+  dta <- dat_this %>%
+    group_by(time, meta.release_tag, meta.price_basis, meta.disaggregation_group) %>%
+    summarise(n_names = n_distinct(meta.name), .groups = "drop")
+
+  dta_chk <- dta %>%
+    left_join(hma, by = "meta.disaggregation_group", suffix = c("","_expected"))
+
+  dta_missed <- dta_chk %>% filter(n_names!=n_names_expected)
+
+  list(
+    any_missed = (NROW(dta_missed)>0),
+    missed_data = dta_missed %>% select(-n_names, -n_names_expected)
+  )
+
+}
+
+aggregate_component_part <- function(tdl){
+
   hmap <- tdl$hmap
 
   hmap_info <- hmap_get_stats(hmap)
 
   # For data tracking
   tdl$data$lineage <- ""
+  if("meta.data_lineage" %in% colnames(tdl$data)){
+    tdl$data$lineage <- tdl$data$meta.data_lineage
+  }
 
   tdl_lst <- split(tdl$data, tdl$data$meta.disaggregation_group)
 
-  tdf_agg <- tdl_lst %>%
+  tdf_agg_l <- tdl_lst %>%
     map(function(nd) {
       tdf_long_op_for_fixed_dg(nd, hmap = hmap, hmap_info = hmap_info)
-    }) %>%
-    rows_append_distinct(
-      primary_key = c("time", "meta.release_tag", "meta.price_basis",
-                      "meta.name", "meta.disaggregation_group"))
+    })
+
+  # tdf_agg <- tdf_agg_l %>%
+  #   rows_append_distinct(
+  #     primary_key = c("time", "meta.release_tag", "meta.price_basis",
+  #                     "meta.name", "meta.disaggregation_group"))
+
+  tdf_agg_all <- tdf_agg_l %>% dplyr::bind_rows()
+
+  tdf_agg_all <- tdf_agg_all %>%
+    mutate(lineage_len = nchar(lineage))
+
+  tdf_agg_min_lin <- tdf_agg_all %>%
+    group_by(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) %>%
+    dplyr::slice_min(order_by = lineage_len, n = 1, with_ties = FALSE) %>%
+    ungroup()
 
   # lineage data is generated here but not used (kept only for debugging)
   # tdf_agg <- tdf_agg %>% rename(meta.data_lineage = lineage)
-  tdf_agg <- tdf_agg %>% select(-lineage)
+  tdf_agg <- tdf_agg_min_lin %>%
+    mutate(meta.data_lineage = lineage) %>%
+    select(-lineage, -lineage_len)
 
-  # This is again kept for safety (may be removed later)
   # But this is already part of the below tdf_long_check_structure(tdf_agg, hmap)
 
-  tdf_long_make(
+  tdl_out <- tdf_long_make(
     dat = tdf_agg,
     hmap = hmap
+  )
+
+  list(
+    main_agg = tdl_out,
+    all_agg_dat = tdf_agg_all
   )
 
 }
@@ -170,27 +243,23 @@ tdf_long_op_for_fixed_dg <- function(nd, hmap, hmap_info){
 
   if(NROW(h_to_do)>0){
     # It means some more aggregation is possible
-    for_a_disaggregation_group <- function(dg){
-      this_map <- hmap[c(hthis,dg)]
-      colnames(this_map) <- c("meta.name", "meta.parent")
-      this_map <- distinct(this_map)
 
-      nd_dg <- nd %>%
-        left_join(this_map, by = "meta.name")
-
-      tdf_long_op_for_a_parent_in_fixed_dg(
-        nd_dg,
-        hmap = hmap,
-        nd_orig_cols = nd_orig_cols,
-        agg_fn = agg_fn)
-    }
+    all_4_pks <- nd %>% distinct(time, meta.release_tag, meta.price_basis, meta.disaggregation_group)
 
     hs <- h_to_do$to %>%
-      map(for_a_disaggregation_group) %>%
+      map(function(.x){
+        tdf_long_op_for_taget_dg(
+          .x,
+          nd = nd, hmap = hmap,
+          hthis = hthis, all_4_pks = all_4_pks, agg_fn = agg_fn,
+          nd_orig_cols = nd_orig_cols)
+      }) %>%
+      # Here each node already have different meta.disaggregation_group and thus will not have any impact of rows_append_distinct. Both rbind and this are same.
       rows_append_distinct(
         primary_key = c("time", "meta.release_tag", "meta.price_basis",
                         "meta.name", "meta.disaggregation_group"))
 
+    # Ideally here also nd and hs would have different dgs and thus rows_append_distinct may be same as rbind.
     final_variant <- rows_append_distinct(
       nd, hs,
       primary_key = c("time", "meta.release_tag", "meta.price_basis",
@@ -203,6 +272,43 @@ tdf_long_op_for_fixed_dg <- function(nd, hmap, hmap_info){
   final_variant[intersect(nd_orig_cols, colnames(final_variant))]
 }
 
+
+tdf_long_op_for_taget_dg <- function(dg, nd, hmap, hthis, all_4_pks, agg_fn, nd_orig_cols){
+  this_map <- hmap[c(hthis,dg)]
+  colnames(this_map) <- c("meta.name", "meta.parent")
+  this_map <- distinct(this_map)
+
+  this_map_ext <- this_map %>% dplyr::cross_join(all_4_pks)
+
+  nd_dg <- nd %>%
+    full_join(
+      this_map_ext,
+      by = c("time", "meta.release_tag", "meta.price_basis",
+             "meta.name", "meta.disaggregation_group"))
+
+  # Which Parent can not be derived.
+  any_missing <- nd_dg %>%
+    group_by(time, meta.release_tag, meta.price_basis,
+             meta.disaggregation_group, meta.parent) %>%
+    summarise(v_check = agg_fn(value.level)) %>% filter(is.na(v_check))
+
+  # Removing those parents
+  nd_dg_rem_pk_with_missing <- nd_dg %>%
+    anti_join(
+      any_missing,
+      by = c("time", "meta.release_tag", "meta.price_basis",
+             "meta.disaggregation_group","meta.parent"))
+
+  if(NROW(nd_dg_rem_pk_with_missing)==0) {
+    return(tibble())
+  }
+
+  tdf_long_op_for_a_parent_in_fixed_dg(
+    nd_dg_rem_pk_with_missing,
+    hmap = hmap,
+    nd_orig_cols = nd_orig_cols,
+    agg_fn = agg_fn)
+}
 
 tdf_long_op_for_a_parent_in_fixed_dg <- function(nd_v, hmap, nd_orig_cols, agg_fn){
   if(nd_v$meta.parent[1] == "#root"){
