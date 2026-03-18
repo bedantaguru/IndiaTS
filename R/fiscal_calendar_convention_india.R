@@ -542,19 +542,19 @@ fiscal_halfyear_to_date <- function(x, anchor = c("mid", "first", "last")) {
   fy   <- m[valid, 3]
   idx <- which(valid)
 
-  # extract base year from FY
-  base_year <- as.integer(substr(fy, 1, 4))
+  # extract starting year of FY
+  fy_start_year <- as.integer(substr(fy, 1, 4))
 
   # compute start and end dates for each half-year
   for (i in seq_along(idx)) {
     if (hy[i] == "H1") {
-      # H1: April to September of base year
-      start_date <- as.Date(sprintf("%04d-04-01", base_year[i]))
-      end_date   <- as.Date(sprintf("%04d-09-30", base_year[i]))
+      # H1: April to September of FY start year
+      start_date <- as.Date(sprintf("%04d-04-01", fy_start_year[i]))
+      end_date   <- as.Date(sprintf("%04d-09-30", fy_start_year[i]))
     } else {
-      # H2: October of base year to March of next year
-      start_date <- as.Date(sprintf("%04d-10-01", base_year[i]))
-      end_date   <- as.Date(sprintf("%04d-03-31", base_year[i] + 1L))
+      # H2: October of FY start year to March of next year
+      start_date <- as.Date(sprintf("%04d-10-01", fy_start_year[i]))
+      end_date   <- as.Date(sprintf("%04d-03-31", fy_start_year[i] + 1L))
     }
 
     out[idx[i]] <- switch(

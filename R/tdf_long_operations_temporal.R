@@ -2,6 +2,8 @@
 
 aggregate_temporal <- function(tdl, to_freq, silent = FALSE){
 
+  tdf_long_check_structure(tdl)
+
   known_fqs <- c("month", "quarter", "halfyear", "year")
 
   fq <- frequency.tdf_long(tdl)

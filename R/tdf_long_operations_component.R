@@ -1,7 +1,11 @@
 
-aggregate_component <- function(tdl){
+aggregate_component <- function(tdl, n_iter = Inf, silent = FALSE){
+
+  tdf_long_check_structure(tdl)
 
   tdl_now <- tdl
+
+  i <- 1
 
   repeat{
     agg_part <- aggregate_component_part(tdl_now)
@@ -11,6 +15,18 @@ aggregate_component <- function(tdl){
     chk <- check_component_disaggregation_layer_completeness(tdl_now)
 
     if(!chk$any_missed) break()
+
+    i <- i+1
+
+    if(i>n_iter) {
+
+      if(chk$any_missed && !silent){
+        warning("Maximum number of iterations reached while aggregating component. Some disaggregation groups may not be fully aggregated.", call. = FALSE)
+      }
+
+      break()
+    }
+
   }
 
   tdl_now
@@ -69,11 +85,6 @@ aggregate_component_part <- function(tdl){
     map(function(nd) {
       tdf_long_op_for_fixed_dg(nd, hmap = hmap, hmap_info = hmap_info)
     })
-
-  # tdf_agg <- tdf_agg_l %>%
-  #   rows_append_distinct(
-  #     primary_key = c("time", "meta.release_tag", "meta.price_basis",
-  #                     "meta.name", "meta.disaggregation_group"))
 
   tdf_agg_all <- tdf_agg_l %>% dplyr::bind_rows()
 
