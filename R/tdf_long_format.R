@@ -101,11 +101,13 @@ tdf_long_release_tag_task <- function(dat, add_latest = FALSE){
                paste0(chk2, collapse = ", ")), call. = FALSE)
     }
 
-    if(!("meta.release_date" %in% colnames(dat2)) & !("meta.release_order" %in% colnames(dat2))){
-      stop("To determine the latest revision it is required to have either 'meta.release_date' or 'meta.release_order' column in the data. Please ensure that at least one of these columns is present to identify the latest revision.", call. = FALSE)
-    }
+
 
     if(add_latest){
+
+      if(!("meta.release_date" %in% colnames(dat2)) & !("meta.release_order" %in% colnames(dat2))){
+        stop("To determine the latest revision it is required to have either 'meta.release_date' or 'meta.release_order' column in the data. Please ensure that at least one of these columns is present to identify the latest revision.", call. = FALSE)
+      }
 
       # if  meta.release_date exists then take the latest revision only based on release date otherwise take the latest revision based on release order
       if("meta.release_date" %in% colnames(dat2)){
@@ -138,6 +140,14 @@ tdf_long_hierarchy_map_task <- function(
     retain_known_disaggregation_groups_only = FALSE) {
   known_dgs <- colnames(hmap)
   data_dgs <- dat$meta.disaggregation_group %>% unique()
+
+  if(!("indicator" %in% colnames(hmap))){
+    stop("Hierarchy map must have an 'indicator' column representing the indicator level. Please check the hierarchy_map.", call. = FALSE)
+  }
+
+  if(length(unique(hmap$indicator))!=1){
+    stop("Hierarchy map 'indicator' column should have only one unique value representing the indicator level. Please check the hierarchy_map.", call. = FALSE)
+  }
 
   if(length(intersect(known_dgs, data_dgs)) == 0){
     stop("None of the disaggregation groups in data are present in hierarchy_map. Please check the data and hierarchy_map.", call. = FALSE)
@@ -195,7 +205,10 @@ tdf_long_time_task <- function(dat){
 
 }
 
-tdf_long_make <- function(dat, hmap, add_latest = TRUE, retain_known_disaggregation_groups_only = TRUE){
+tdf_long_make <- function(
+    dat, hmap,
+    add_latest = TRUE, retain_known_disaggregation_groups_only = TRUE,
+    minimal = FALSE){
 
   if(is.list(dat) && !is.data.frame(dat)){
     if(!all(c("data", "hmap") %in% names(dat))){
@@ -205,17 +218,23 @@ tdf_long_make <- function(dat, hmap, add_latest = TRUE, retain_known_disaggregat
       tdf_long_make(
         dat = dat$data, hmap = dat$hmap,
         add_latest =  add_latest,
-        retain_known_disaggregation_groups_only = retain_known_disaggregation_groups_only)
+        retain_known_disaggregation_groups_only = retain_known_disaggregation_groups_only,
+        minimal = minimal)
     )
   }
 
-  dat2 <- tdf_long_check_structure(
-    dat,
-    hmap = hmap,
-    add_latest = add_latest,
-    retain_known_disaggregation_groups_only = retain_known_disaggregation_groups_only)
+  if(!minimal){
+    dat2 <- tdf_long_check_structure(
+      dat,
+      hmap = hmap,
+      add_latest = add_latest,
+      retain_known_disaggregation_groups_only = retain_known_disaggregation_groups_only)
 
-  obj <- list(data = dat2, hmap = hmap)
+    obj <- list(data = dat2, hmap = hmap)
+  } else {
+    obj <- list(data = dat, hmap = hmap)
+  }
+
   class(obj) <- tdf_long_class
   obj
 

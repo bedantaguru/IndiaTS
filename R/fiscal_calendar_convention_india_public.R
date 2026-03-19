@@ -67,7 +67,11 @@ fiscal_month <- function(x, with_year = TRUE){
       stop("Input must be either a date or character vector.", call. = FALSE)
     }
   }
-  class(res) <- fiscal_period_class
+  if(with_year) {
+    class(res) <- fiscal_period_class
+  } else {
+    res <- as.character(res)
+  }
   res
 }
 
@@ -156,7 +160,11 @@ fiscal_quarter <- function(x, with_year = TRUE, auto_convert_calendar_quarter = 
       }
     }
   }
-  class(res) <- fiscal_period_class
+  if(with_year) {
+    class(res) <- fiscal_period_class
+  } else {
+    res <- as.character(res)
+  }
   res
 }
 
@@ -220,7 +228,11 @@ calendar_quarter <- function(x, with_year = TRUE, auto_convert_fiscal_quarter = 
     }
   }
 
-  class(res) <- calendar_period_class
+  if(with_year){
+    class(res) <- calendar_period_class
+  } else {
+    res <- as.character(res)
+  }
   res
 }
 
@@ -293,7 +305,11 @@ fiscal_halfyear <- function(x, with_year = TRUE){
       stop("Input must be either a date or character vector.", call. = FALSE)
     }
   }
-  class(res) <- fiscal_period_class
+  if(with_year){
+    class(res) <- fiscal_period_class
+  } else {
+    res <- as.character(res)
+  }
   res
 }
 
@@ -434,7 +450,12 @@ as_fiscal_period <- function(x, with_year = TRUE, homogeneous_frequency = TRUE) 
       }
     }
   }
-  class(res) <- fiscal_period_class
+  if(with_year){
+    class(res) <- fiscal_period_class
+  } else {
+    res <- as.character(res)
+  }
+
   res
 }
 
@@ -506,7 +527,11 @@ as_calendar_period <- function(x, with_year = TRUE) {
       }
     }
   }
-  class(res) <- calendar_period_class
+  if(with_year){
+    class(res) <- calendar_period_class
+  } else {
+    res <- as.character(res)
+  }
   res
 }
 

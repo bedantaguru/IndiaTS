@@ -207,7 +207,9 @@ rows_append_distinct <- function(dmain, dincre = NULL, primary_key) {
 }
 
 
-quartile_deviation <- function(x, na.rm = TRUE) {
-  q <- quantile(x, probs = c(0.25, 0.75), na.rm = na.rm)
-  (q[2] - q[1]) / 2
+quartile_deviation <- function(x, na.rm = TRUE, prob = 0.25) {
+  prob <- min(prob, 1-prob)
+  q <- quantile(x, probs = c(prob, 1-prob), na.rm = na.rm)
+  q <- as.numeric(q)
+  (max(x) - min(q)) / 2
 }

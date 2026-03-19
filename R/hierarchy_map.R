@@ -134,7 +134,6 @@ hmap_which_disaggregation_group <- function(meta_names, hmap, return_covs = FALS
   which(hmvec==max(hmvec)) %>% names
 }
 
-
 # tdl = tdf long
 hmap_add <- function(tdl,  new_hmap){
 

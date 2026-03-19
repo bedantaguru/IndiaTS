@@ -155,7 +155,7 @@ linked_tdf_long_implied_figures <- function(linked_tdl){
   # Extract implied rows with the same column order as the original high-frequency dataset
   hf_part <- deficiency_map_impl[hf_orig_cols]
 
-  # Preserve the original high-frequency data as base
+  # Preserve the original high-frequency data
   hf_pre <- hf[hf_orig_cols]
 
   # Append implied rows while ensuring primary-key uniqueness

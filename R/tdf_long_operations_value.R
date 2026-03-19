@@ -178,7 +178,13 @@ calculate_standard_measures <- function(tdl){
   dat_defl_calc <- NULL
 
   if(all(!is.na(dat_defl$meta.is_real)) && all(!is.na(dat_defl$meta.is_nominal))){
-    if(all(!dat_defl$meta.is_real==dat_defl$meta.is_nominal)) chk <- TRUE
+    if(all(!dat_defl$meta.is_real==dat_defl$meta.is_nominal)) {
+      nr <- dat_defl %>% filter(meta.is_real) %>% NROW()
+      nn <- dat_defl %>% filter(meta.is_nominal) %>% NROW()
+      if(nr > 1 && nn > 1){
+        chk <- TRUE
+      }
+    }
   }
 
 

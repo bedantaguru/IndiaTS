@@ -33,7 +33,10 @@ aggregate_component <- function(tdl, n_iter = Inf, silent = FALSE){
 
 }
 
-check_component_disaggregation_layer_completeness <- function(tdl){
+check_component_disaggregation_layer_completeness <- function(tdl, detailed_check = TRUE){
+
+  # The arg detailed_check can be disabled for performance gain! But now not
+  # focus on performance hence keeping it open (TRUE)
 
   dat_this <- tdl$data
   hmap_this <- tdl$hmap
@@ -60,9 +63,25 @@ check_component_disaggregation_layer_completeness <- function(tdl){
 
   dta_missed <- dta_chk %>% filter(n_names!=n_names_expected)
 
+  is_any_missed <- (NROW(dta_missed)>0)
+
+
+  missed_data_details <- NULL
+
+  if(is_any_missed || detailed_check){
+    hm_ext <- dat_this %>%
+      distinct(time, meta.release_tag, meta.price_basis, meta.disaggregation_group) %>%
+      dplyr::left_join(hm, by = "meta.disaggregation_group")
+    dat_this_common <- dat_this %>%
+      full_join(hm_ext, by = colnames(hm_ext)) %>%
+      distinct()
+    missed_data_details <- dat_this_common %>% filter(is.na(value.level))
+  }
+
   list(
-    any_missed = (NROW(dta_missed)>0),
-    missed_data = dta_missed %>% select(-n_names, -n_names_expected)
+    any_missed = is_any_missed,
+    missed_data = dta_missed %>% select(-n_names, -n_names_expected),
+    missed_data_details = missed_data_details
   )
 
 }
@@ -375,4 +394,146 @@ tdf_long_op_for_a_parent_in_fixed_dg <- function(nd_v, hmap, nd_orig_cols, agg_f
   nd_ag <- nd_ag[intersect(nd_orig_cols, colnames(nd_ag))]
   nd_ag
 }
+
+
+
+make_consistent_disaggregation_groups <- function(
+    tdl,
+    fixed = c("upper","lower"),
+    waterfall_idx = NULL){
+
+  hinfo <- hmap_get_stats(tdl$hmap)
+
+  fixed <- match.arg(fixed)
+
+  if(fixed == "lower"){
+    make_consistent_dg_lower_fixed(tdl, hinfo = hinfo)
+  } else {
+    make_consistent_dg_upper_fixed(tdl, hinfo = hinfo,
+                                   waterfall_idx = waterfall_idx)
+  }
+
+}
+
+make_consistent_dg_lower_fixed <- function(tdl, hinfo){
+
+  hid <- hinfo$from_to_map
+  hid <- hid %>%
+    distinct(dg = from, lvl = lvl_up_from) %>%
+    bind_rows(hid %>% distinct(dg = to, lvl = lvl_up_to)) %>% distinct()
+  hid <- hid %>% group_by(dg) %>% summarise(lvl = as.integer(mean(lvl)))
+  hid <- hid %>% rename(meta.disaggregation_group = dg)
+
+  td <- tdl$data
+
+  td <- td  %>%
+    left_join(
+      hid,
+      by = "meta.disaggregation_group"
+    )
+
+  td_granular_most_dgs <- td %>%
+    group_by(time, meta.release_tag, meta.price_basis) %>%
+    filter(lvl == max(lvl)) %>%
+    ungroup() %>%
+    select(
+      time,
+      meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group,
+      value.level)
+
+  tdl_interim <- tdl
+
+  tdl_interim$data <- td_granular_most_dgs
+
+  tdl_interim_filled <- aggregate_component(tdl_interim)
+
+  tdl_interim_filled
+
+}
+
+make_consistent_dg_upper_fixed <- function(tdl, hinfo, waterfall_idx = NULL){
+
+
+
+  if(is.null(waterfall_idx)){
+    waterfall_idx <- map(hinfo$waterfalls, length) %>% unlist() %>% which.max()
+  }
+
+  this_waterfall <- hinfo$waterfalls[[waterfall_idx]]
+
+  sub_sets <- matrix(
+    c(this_waterfall[-length(this_waterfall)], this_waterfall[-1]), ncol = 2)
+
+
+  adj_part <- 1:NROW(sub_sets) %>%
+    map(function(i){
+      make_consistent_dg_upper_fixed_two_dgs(
+        tdl = tdl, hinfo = hinfo,
+        dg_1 = sub_sets[i,1], dg_2 = sub_sets[i,2])
+    }) %>%
+    # Though bind_rows is safe here
+    rows_append_distinct(
+      primary_key = c("time", "meta.release_tag", "meta.price_basis",
+                      "meta.name", "meta.disaggregation_group")
+    )
+
+  adj_part2 <- tdl$data %>% filter(meta.disaggregation_group == this_waterfall[length(this_waterfall)])
+
+  adj_whole <- adj_part %>%
+    # Though bind_rows is safe here
+    rows_append_distinct(
+      adj_part2,
+      primary_key = c("time", "meta.release_tag", "meta.price_basis",
+                      "meta.name", "meta.disaggregation_group")
+    )
+
+  tdl_out <- tdl
+
+  tdl_out$data <- adj_whole
+
+  tdl_out
+
+}
+
+make_consistent_dg_upper_fixed_two_dgs <- function(tdl, hinfo, dg_1, dg_2){
+
+  chk <- hinfo$from_to_map %>% filter(from == dg_1, to == dg_2)
+
+  if(NROW(chk)==0){
+    stop("dg_1 must be more granular (lower aggregation level) than dg_2", call. = FALSE)
+  }
+
+  twp <- attach_parent(tdl, parent_disaggregation_layer = dg_2)
+
+  d_dg1 <- twp$data %>%
+    filter(meta.disaggregation_group == dg_1)
+
+  d_dg2 <- twp$data %>%
+    filter(meta.disaggregation_group == dg_2) %>%
+    select(time,
+           meta.release_tag, meta.price_basis,
+           meta.parent, meta.parent_disaggregation_group,
+           value.parent_level = value.level)
+
+  d_dg1 <- d_dg1 %>%
+    left_join(
+      d_dg2,
+      by = c("time",
+             "meta.release_tag", "meta.price_basis", "meta.parent",
+             "meta.parent_disaggregation_group"))
+
+  d_dg1 <- d_dg1 %>%
+    group_by(
+      time,
+      meta.release_tag, meta.price_basis,
+      meta.parent, meta.parent_disaggregation_group) %>%
+    mutate(value.level_adj = value.level*value.parent_level/sum(value.level)) %>%
+    ungroup()
+
+  d_dg1 %>%
+    select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group, value.level = value.level_adj)
+
+}
+
+
 
