@@ -71,7 +71,7 @@ check_component_disaggregation_layer_completeness <- function(tdl, detailed_chec
   if(is_any_missed || detailed_check){
     hm_ext <- dat_this %>%
       distinct(time, meta.release_tag, meta.price_basis, meta.disaggregation_group) %>%
-      dplyr::left_join(hm, by = "meta.disaggregation_group")
+      dplyr::left_join(hm, by = "meta.disaggregation_group", relationship = "many-to-many")
     dat_this_common <- dat_this %>%
       full_join(hm_ext, by = colnames(hm_ext)) %>%
       distinct()
