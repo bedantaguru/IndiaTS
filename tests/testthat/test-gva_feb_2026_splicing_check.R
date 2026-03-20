@@ -58,7 +58,7 @@ test_that("gva splicing test", {
   tlq_real_wrong_connect <- tdf_long_make(tlq_real_wrong_connect, tla_real$hmap, minimal = TRUE)
 
   msgs <- capture_messages(
-    ms_wrong <- calculate_standard_measures(tlq_real_wrong_connect)
+    ms_wrong <- compute_standard_measures(tlq_real_wrong_connect)
   )
 
   expect_true(
@@ -77,9 +77,9 @@ test_that("gva splicing test", {
 
   capture_messages(
     {
-      ms_1 <- calculate_standard_measures(sp1)
-      ms_2 <- calculate_standard_measures(sp2)
-      ms_all <- calculate_standard_measures(tlq_real)
+      ms_1 <- compute_standard_measures(sp1)
+      ms_2 <- compute_standard_measures(sp2)
+      ms_all <- compute_standard_measures(tlq_real)
     }
   )
 

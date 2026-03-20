@@ -1,5 +1,5 @@
 
-calculate_standard_measures <- function(tdl){
+compute_standard_measures <- function(tdl){
   # Calculate:
 
   # Growth Rate, Momentum, Contribution to Growth Rate, Contribution to
@@ -91,14 +91,36 @@ calculate_standard_measures <- function(tdl){
     )
 
   # Share in parent (for this meta.disaggregation_group and meta.name)
+
+
+
+  # # In this Approach it is possible that parents are not supposed to sum up
+  #
+  # dat <- dat %>%
+  #   group_by(time, meta.release_tag, meta.price_basis,
+  #            meta.disaggregation_group,
+  #            meta.parent, meta.parent_disaggregation_group) %>%
+  #   mutate(
+  #     value.share_pct = value.level / sum(value.level, na.rm = TRUE)*100
+  #   ) %>%
+  #   ungroup()
+
+  # That's why following approvah is taken for share
+
+  dat_parent <- dat %>%
+    filter(meta.name==meta.parent, meta.disaggregation_group==meta.parent_disaggregation_group) %>%
+    select(
+      time,
+      meta.release_tag, meta.price_basis, meta.parent, meta.parent_disaggregation_group,
+      value.level_parent = value.level)
+
   dat <- dat %>%
-    group_by(time, meta.release_tag, meta.price_basis,
-             meta.disaggregation_group,
-             meta.parent, meta.parent_disaggregation_group) %>%
-    mutate(
-      value.share_pct = value.level / sum(value.level, na.rm = TRUE)*100
-    ) %>%
-    ungroup()
+    left_join(
+      dat_parent,
+      by = c("time","meta.release_tag","meta.price_basis","meta.parent",
+             "meta.parent_disaggregation_group"))
+
+  dat <- dat %>% mutate(value.share_pct = value.level / value.level_parent * 100)
 
   # Attach last year and last period shares
   dat <- dat %>%
@@ -134,15 +156,15 @@ calculate_standard_measures <- function(tdl){
 
   # Temporal Side Measure (Contribution in Annual)
 
-   dat <- dat %>%
-     mutate(time_year = fiscal_year(time))  %>%
-     group_by(time_year, meta.release_tag, meta.price_basis,
-              meta.name, meta.disaggregation_group) %>%
-     mutate(
-       value.annual_contribution = value.level / sum(value.level, na.rm = TRUE)*100
-     ) %>%
-     ungroup() %>%
-     select(-time_year)
+  dat <- dat %>%
+    mutate(time_year = fiscal_year(time))  %>%
+    group_by(time_year, meta.release_tag, meta.price_basis,
+             meta.name, meta.disaggregation_group) %>%
+    mutate(
+      value.annual_contribution = value.level / sum(value.level, na.rm = TRUE)*100
+    ) %>%
+    ungroup() %>%
+    select(-time_year)
 
 
   # Remove intermediate time_prev_period and time_prev_year columns

@@ -60,12 +60,12 @@ test_that("gva numbers match", {
   )
 
   expect_message(
-    stdm_a <- calculate_standard_measures(tdl_a_all),
+    stdm_a <- compute_standard_measures(tdl_a_all),
     "meta.parent column not found in data"
   )
 
   expect_message(
-    stdm <- calculate_standard_measures(tdl0),
+    stdm <- compute_standard_measures(tdl0),
     "meta.parent column not found in data"
   )
 
