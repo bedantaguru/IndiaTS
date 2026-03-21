@@ -192,7 +192,7 @@ tdf_long_hierarchy_map_task <- function(
 tdf_long_time_task <- function(dat){
   dat$time <- as_fiscal_period(dat$time)
 
-  if(!is_continuous(unique(dat$time))){
+  if(!is_continuous(dat$time)){
     stop("Time column should have continuous values without gaps. Please check the time column for any missing periods.", call. = FALSE)
   }
 

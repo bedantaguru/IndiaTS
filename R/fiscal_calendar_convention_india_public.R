@@ -1174,16 +1174,23 @@ next_year <- function(x) {
 #' @export
 is_continuous <- function(fp) {
 
+
   if(!is_period_type(fp)){
     stop("Input is not a recognized period type (fiscal or calendar).", call. = FALSE)
   }
 
-  fp_date <- as.Date(fp, anchor = "mid")
   freq <- stats::frequency(fp, singular = TRUE)
 
   if(freq == "mixed"){
     return(FALSE)
   }
+
+  fp <- unique(fp)
+  fp <- sort(fp)
+
+  freq <- stats::frequency(fp, singular = TRUE)
+
+  fp_date <- as.Date(fp, anchor = "mid")
 
   expected_gap <- dplyr::case_when(
     freq == "month" ~ 30,
@@ -1226,11 +1233,7 @@ sort.fiscal_period <- function(x, decreasing = FALSE, ...) {
 
   ord <- order(x_dt, decreasing = decreasing)
 
-  res <- as_fiscal_period_for_date(x_dt[ord])
-
-  class(res) <- fiscal_period_class
-
-  res
+  x[ord]
 }
 
 #' @export
@@ -1257,11 +1260,7 @@ sort.calendar_period <- function(x, decreasing = FALSE, ...) {
 
   ord <- order(x_dt, decreasing = decreasing)
 
-  res <- as_calendar_period_for_date(x_dt[ord])
-
-  class(res) <- calendar_period_class
-
-  res
+  x[ord]
 }
 
 

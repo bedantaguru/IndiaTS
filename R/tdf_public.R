@@ -134,7 +134,7 @@ as_tdf <- function(df, allow_discontinuous = TRUE, fiscal_type = TRUE){
   attr(df, "shape") <- "wide"
 
   cont_chk <- tryCatch({
-       is_continuous_time(df$time)},
+       is_continuous(df$time)},
     error = function(e){
       # warning("Continuity check failed. Setting continuity attribute to NA", call. = FALSE)
       NA

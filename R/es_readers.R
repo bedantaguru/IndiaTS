@@ -555,5 +555,94 @@ es_convert_gva <- function(dat, hmap, freq){
 
 }
 
+# TODO: This needs to be done nicely. Now doing it for this IDG
+es_convert_gdp <- function(dat, hmap = NULL, freq) {
 
+  if (missing(hmap) || is.null(hmap)) {
+    hmap <- es_load_predefined_data("hmap_gdp")
+  }
+
+  if (missing(freq)) {
+
+    if (!"frequency" %in% colnames(dat)) {
+      stop(
+        "Frequency not specified and no 'frequency' column found in the data. Please specify 'quarterly' or 'annual', or include a 'frequency' column.",
+        call. = FALSE
+      )
+    }
+
+    freqs <- dat$frequency %>% unique()
+
+    if (length(freqs) != 1 || !tolower(freqs) %in% c("quarterly", "annual")) {
+      stop(
+        "Multiple or invalid frequencies found. 'frequency' column must contain a single value: 'quarterly' or 'annual'.",
+        call. = FALSE
+      )
+    }
+
+    freq <- tolower(freqs[[1]])
+  } else {
+    freq <- tolower(freq)
+  }
+
+  dat <- es_prepare_gdp_data(dat, hmap, freq)
+
+  es_convert_gva(dat, hmap)
+
+}
+
+# TODO: This needs to be done nicely.
+es_prepare_gdp_data <- function(dat, hmap, freq = c("quarterly", "annual")) {
+
+  freq <- match.arg(freq)
+
+  valid_inds <- hmap %>% unlist() %>% unique()
+
+  dat <- dat %>%
+    dplyr::mutate(
+      industry = indicator,
+      subindustry = NA_character_,
+      indicator = "Gross Domestic Product"
+    ) %>%
+    dplyr::filter(industry %in% valid_inds)
+
+  # GFCF handling
+  dat <- dplyr::bind_rows(
+    dat %>%
+      dplyr::filter(
+        industry == "Gross Fixed Capital Formation",
+        is.na(institutional_sector) |
+          institutional_sector == "Total Gross Fixed Capital Formation"
+      ) %>%
+      dplyr::mutate(institutional_sector = NA_character_),
+
+    dat %>%
+      dplyr::filter(industry != "Gross Fixed Capital Formation")
+  )
+
+  # Validation (inlined)
+  grp_vars <- c("year", "base_year", "revision")
+  if (freq == "quarterly") {
+    grp_vars <- c(grp_vars, "quarter")
+  }
+
+  problematic <- dat %>%
+    dplyr::filter(
+      industry == "Gross Fixed Capital Formation",
+      is.na(institutional_sector)
+    ) %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(grp_vars))) %>%
+    cols_causing_group_variation()
+
+  if (length(problematic) > 0) {
+    stop(
+      "GFCF has multiple observations within group; check institutional_sector aggregation.",
+      call. = FALSE
+    )
+  }
+
+  # Final cleanup
+  dat %>%
+    dplyr::mutate(institutional_sector = NA_character_)
+}
 
