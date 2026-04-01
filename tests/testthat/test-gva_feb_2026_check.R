@@ -6,6 +6,93 @@ test_that("gva numbers match", {
   tla <- d1 %>% es_convert_gva()
   tlq <- d2 %>% es_convert_gva()
 
+  # new hmap for additional mapping
+  new_hmap <- tibble::tibble(
+    sub_industry = c("Crops", "Livestock", "Forestry and Logging",
+                     "Fishing and Aquaculture"),
+    agri_regroup_1 = c("Crops", "Allied Activities",
+                       "Allied Activities", "Allied Activities")
+  )
+
+  tla2 <- hmap_add(tla, new_hmap)
+
+  expect_identical(tla2$data, tla$data)
+
+  tla2 <- tla2 |> aggregate_component()
+
+  tla2_sub <- attach_parent(tla2, "agri_flag_type")
+
+  tla2_stats <- compute_standard_metrics(tla2_sub)
+
+  mpr_2025_check <- tla2_stats$main$data %>%
+    filter(
+      meta.release_tag=="#main",
+      str_detect(meta.price_basis, "real base_2011"),
+      meta.disaggregation_group == "agri_regroup_1",
+      meta.name!="#NR") %>%
+    select(time, meta.name, value.contribution_growth_rate) %>%
+    filter(!is.na(value.contribution_growth_rate)) %>%
+    mutate(value.contribution_growth_rate =
+             round(value.contribution_growth_rate, 1)) %>%
+    tidyr::pivot_wider(
+      id_cols = time,
+      names_from = meta.name,
+      values_from = value.contribution_growth_rate) %>%
+    dplyr::arrange(as.Date(time))
+
+
+  expect_equal(
+    sum(mpr_2025_check$`Allied Activities`), 31.5
+  )
+
+  expect_equal(sum(abs(mpr_2025_check$Crops)), 26.6)
+
+
+  tla2_sub$data <- tla2_sub$data %>%
+    filter(str_detect(meta.price_basis, "real"))
+
+  tla2_sub <- splice_series(tla2_sub)
+
+  # After Splice check
+  tla2_sub <- attach_parent(tla2_sub, "agri_flag_type")
+
+  tla2_stats <- compute_standard_metrics(tla2_sub)
+
+  mpr_2026_check <- tla2_stats$main$data %>%
+    filter(
+      meta.release_tag=="#main",
+      meta.disaggregation_group == "agri_regroup_1",
+      meta.name!="#NR") %>%
+    select(time, meta.name, value.contribution_growth_rate) %>%
+    filter(!is.na(value.contribution_growth_rate)) %>%
+    mutate(value.contribution_growth_rate =
+             round(value.contribution_growth_rate, 1)) %>%
+    tidyr::pivot_wider(
+      id_cols = time,
+      names_from = meta.name,
+      values_from = value.contribution_growth_rate) %>%
+    dplyr::arrange(as.Date(time))
+
+  expect_equal(
+    mpr_2026_check %>% filter(time == "2023-24") %>% pull(Crops),
+    1.6
+  )
+
+  expect_equal(
+    mpr_2026_check %>% filter(time == "2023-24") %>% pull(`Allied Activities`),
+    1.1
+  )
+
+  expect_equal(
+    mpr_2026_check %>% filter(time == "2024-25") %>% pull(Crops),
+    2.0
+  )
+
+  expect_equal(
+    mpr_2026_check %>% filter(time == "2024-25") %>% pull(`Allied Activities`),
+    2.2
+  )
+
   ltdl0 <-  tdf_long_temporal_link(tlq, tla)
   ltdl1 <-  tdf_long_temporal_link(tla, tlq)
 
@@ -60,12 +147,12 @@ test_that("gva numbers match", {
   )
 
   expect_message(
-    stdm_a <- compute_standard_measures(tdl_a_all),
+    stdm_a <- compute_standard_metrics(tdl_a_all),
     "meta.parent column not found in data"
   )
 
   expect_message(
-    stdm <- compute_standard_measures(tdl0),
+    stdm <- compute_standard_metrics(tdl0),
     "meta.parent column not found in data"
   )
 

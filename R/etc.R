@@ -78,7 +78,12 @@ get_extdata_path <- function(file) {
               package = utils::packageName())
 }
 
-
+pkg_user_dir <- function(which = "data") {
+  pkg <- utils::packageName()
+  path <- tools::R_user_dir(pkg, which = which)
+  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  path
+}
 
 
 cols_causing_group_variation <- function(d, group_colnames) {

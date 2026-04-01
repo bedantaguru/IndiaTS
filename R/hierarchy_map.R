@@ -137,4 +137,27 @@ hmap_which_disaggregation_group <- function(meta_names, hmap, return_covs = FALS
 # tdl = tdf long
 hmap_add <- function(tdl,  new_hmap){
 
+  this_hmap <- tdl$hmap
+  common_cols <- intersect(colnames(this_hmap), colnames(new_hmap))
+
+  chk <- common_cols %>%
+    map_lgl(function(cn){
+      extra <- new_hmap[[cn]] %>% setdiff(this_hmap[[cn]])
+      length(extra)==0
+    })
+
+  if(!all(chk)){
+    stop("Not possible to merge!", call. = FALSE)
+  }
+
+  merged_hmap <-  this_hmap %>%
+    left_join(new_hmap, by = common_cols, relationship = "many-to-many")
+
+  merged_hmap <- merged_hmap %>%
+    dplyr::mutate_all(~tidyr::replace_na(., "#NR"))
+
+  tdl$hmap <- dplyr::distinct(merged_hmap)
+
+  tdl
+
 }
