@@ -218,3 +218,18 @@ quartile_deviation <- function(x, na.rm = TRUE, prob = 0.25) {
   q <- as.numeric(q)
   (max(x) - min(q)) / 2
 }
+
+
+drop_constant_cols <- function(data, na = FALSE) {
+
+  data %>%
+    dplyr::select(
+      dplyr::where(~ {
+        if (na) {
+          dplyr::n_distinct(.x) > 1
+        } else {
+          dplyr::n_distinct(.x, na.rm = TRUE) > 1
+        }
+      })
+    )
+}
