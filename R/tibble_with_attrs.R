@@ -86,3 +86,73 @@ print.tibble_with_attrs <- function(x, ...) {
   }
   invisible(x)
 }
+
+
+# helper: re-attach sticky attrs and re-assert class
+.restore_tibble_attrs <- function(out, template) {
+  saved <- sticky_attrs(template)
+  for (nm in names(saved)) attr(out, nm) <- saved[[nm]]
+  if (!inherits(out, "tibble_with_attrs")) {
+    class(out) <- union("tibble_with_attrs", class(out))
+  }
+  out
+}
+
+#' @export
+#' @importFrom dplyr summarise
+summarise.tibble_with_attrs <- function(.data, ...) {
+  .restore_tibble_attrs(NextMethod(), .data)
+}
+
+#' @export
+#' @importFrom dplyr summarize
+summarize.tibble_with_attrs <- summarise.tibble_with_attrs
+
+#' @export
+#' @importFrom dplyr reframe
+reframe.tibble_with_attrs <- function(.data, ...) {
+  .restore_tibble_attrs(NextMethod(), .data)
+}
+
+#' @export
+#' @importFrom dplyr ungroup
+ungroup.tibble_with_attrs <- function(x, ...) {
+  .restore_tibble_attrs(NextMethod(), x)
+}
+
+#' @export
+#' @importFrom dplyr group_by
+group_by.tibble_with_attrs <- function(.data, ...) {
+  .restore_tibble_attrs(NextMethod(), .data)
+}
+
+#' @export
+#' @importFrom dplyr rowwise
+rowwise.tibble_with_attrs <- function(data, ...) {
+  .restore_tibble_attrs(NextMethod(), data)
+}
+
+#' @export
+#' @importFrom dplyr count
+count.tibble_with_attrs <- function(x, ...) {
+  .restore_tibble_attrs(NextMethod(), x)
+}
+
+#' @export
+#' @importFrom dplyr tally
+tally.tibble_with_attrs <- function(x, ...) {
+  .restore_tibble_attrs(NextMethod(), x)
+}
+
+#' @export
+#' @importFrom dplyr add_count
+add_count.tibble_with_attrs <- function(x, ...) {
+  .restore_tibble_attrs(NextMethod(), x)
+}
+
+
+#' @export
+#' @importFrom dplyr nest_by
+nest_by.tibble_with_attrs <- function(.data, ...) {
+  .restore_tibble_attrs(NextMethod(), .data)
+}
