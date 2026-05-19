@@ -3,8 +3,8 @@
 # This functions adds meta.low_freq_time to High Frequency tdl
 tdf_long_temporal_link <- function(tdl1 , tdl2){
 
-  fq1 <- frequency.tdf_long(tdl1)
-  fq2 <- frequency.tdf_long(tdl2)
+  fq1 <- frequency.tdf_long_list(tdl1)
+  fq2 <- frequency.tdf_long_list(tdl2)
 
   if(fq1==fq2){
     stop("Both are of same frequency, no linking possible/needed!", call. = FALSE)
@@ -57,8 +57,8 @@ linked_tdf_long_implied_figures <- function(linked_tdl){
   # Preserve original high-frequency column order so appended rows match structure
   hf_orig_cols <- colnames(hf)
 
-  high_freq <- frequency.tdf_long(linked_tdl$high_freq)
-  low_freq <- frequency.tdf_long(linked_tdl$low_freq)
+  high_freq <- frequency.tdf_long_list(linked_tdl$high_freq)
+  low_freq <- frequency.tdf_long_list(linked_tdl$low_freq)
 
   fi_this <- freq_info_for_two_freqs(low_freq, high_freq)
 
@@ -168,15 +168,15 @@ linked_tdf_long_implied_figures <- function(linked_tdl){
   # Replace high-frequency data inside the linked structure with the augmented dataset
   linked_tdl$high_freq$data <- hf_pre
 
-  # Return updated linked tdf_long object
+  # Return updated linked tdf_long_list object
   linked_tdl
 
 }
 
 linked_tdf_long_tally <- function(linked_tdl) {
 
-  high_freq <- frequency.tdf_long(linked_tdl$high_freq)
-  low_freq <- frequency.tdf_long(linked_tdl$low_freq)
+  high_freq <- frequency.tdf_long_list(linked_tdl$high_freq)
+  low_freq <- frequency.tdf_long_list(linked_tdl$low_freq)
 
   from_high_to_low <- aggregate_temporal(
     linked_tdl$high_freq,

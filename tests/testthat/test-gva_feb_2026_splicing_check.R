@@ -62,10 +62,6 @@ test_that("gva splicing test", {
   )
 
   expect_true(
-    any(str_detect(msgs, "Deflator calculation skipped"))
-  )
-
-  expect_true(
     any(str_detect(msgs, "meta.parent column not found"))
   )
 

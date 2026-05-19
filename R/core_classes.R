@@ -6,12 +6,12 @@ calendar_period_class <- c("calendar_period")
 
 tdf_class <- c("tdf", "tbl_df", "tbl", "data.frame")
 
-tdf_long_class <- c("tdf_long", "list")
+tdf_long_list_class <- c("tdf_long_list", "list")
 
 # Set the old class for S4 methods compatibility
 methods::setOldClass(fiscal_period_class)
 methods::setOldClass(tdf_class)
-methods::setOldClass(tdf_long_class)
+methods::setOldClass(tdf_long_list_class)
 
 #' @export
 print.fiscal_period <- function(x, ...){
@@ -32,9 +32,9 @@ print.tdf <- function(x, ...){
 }
 
 #' @export
-print.tdf_long <- function(x, ...){
+print.tdf_long_list <- function(x, ...){
   cat(paste0("A Time-Data-Frame (tdf) - object in Long form, with ",
-             ifelse(NCOL(x$hmap)>0, NCOL(x$hmap), "no"), " disaggregation layers.\n\n"))
+             ifelse(NCOL(x$hmap)>1, NCOL(x$hmap), "no"), " disaggregation layers.\n\n"))
 
   print(tibble::as_tibble(x$data))
 }

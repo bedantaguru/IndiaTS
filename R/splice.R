@@ -11,11 +11,11 @@ splice_series <- function(tdl, target_price_basis){
     summarise(n_times = n_distinct(time), max_time = max(time))
 
   if(length(pbs$meta.price_basis)!=2) {
-    stop("The provided tdf_long object does not contain exactly two price bases. Please check the data and ensure it contains exactly two distinct meta.price_basis values.", call. = FALSE)
+    stop("The provided tdf_long_list object does not contain exactly two price bases. Please check the data and ensure it contains exactly two distinct meta.price_basis values.", call. = FALSE)
   }
 
   if(sum(str_detect(pbs$meta.price_basis, "nominal"))*sum(str_detect(pbs$meta.price_basis, "real"))!=0){
-    warning("The provided tdf_long object contains two price bases, but they contain 'real' and 'nominal' in their names. This may lead to ambiguity in splicing. (Choose either).", call. = FALSE)
+    warning("The provided tdf_long_list object contains two price bases, but they contain 'real' and 'nominal' in their names. This may lead to ambiguity in splicing. (Choose either).", call. = FALSE)
   }
 
   if(missing(target_price_basis)){

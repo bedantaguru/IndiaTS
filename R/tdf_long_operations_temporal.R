@@ -6,7 +6,7 @@ aggregate_temporal <- function(tdl, to_freq, silent = FALSE){
 
   known_fqs <- c("month", "quarter", "halfyear", "year")
 
-  fq <- frequency.tdf_long(tdl)
+  fq <- frequency.tdf_long_list(tdl)
 
   rnk <- which(known_fqs == fq)
 

@@ -235,7 +235,7 @@ tdf_long_make <- function(
     obj <- list(data = dat, hmap = hmap)
   }
 
-  class(obj) <- tdf_long_class
+  class(obj) <- tdf_long_list_class
   obj
 
 }
@@ -262,8 +262,8 @@ tdf_long_check_shallow <- function(obj, return_result = FALSE){
     stop("The 'hmap' element of the object should be a data.frame or tibble.", call. = FALSE)
   }
 
-  if(!inherits(obj, tdf_long_class)){
-    warning(paste0("Object should have class ", paste0(tdf_long_class[1], collapse = ", ")), call. = FALSE)
+  if(!inherits(obj, tdf_long_list_class)){
+    warning(paste0("Object should have class ", paste0(tdf_long_list_class[1], collapse = ", ")), call. = FALSE)
   }
 
   return(invisible(TRUE))
