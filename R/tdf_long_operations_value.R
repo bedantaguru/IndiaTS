@@ -32,7 +32,7 @@ safe_pct <- function(x) {
 }
 
 # =============================================================================
-# compute_metrics
+# compute_metrics_part
 # =============================================================================
 # Computes derived time-series metrics such as growth, momentum,
 # contributions, and shares from value.level.
@@ -41,7 +41,7 @@ safe_pct <- function(x) {
 # internally but not exposed unless explicitly requested.
 # =============================================================================
 
-compute_metrics <- function(
+compute_metrics_part <- function(
     dat,
     level_prev_prd               = FALSE,
     level_prev_year              = FALSE,
@@ -184,20 +184,20 @@ compute_metrics <- function(
   }
 
   # Determine dependencies
-  need_level_prev_prd       <- level_prev_prd || momentum || ln_momentum || contribution_momentum || contribution_momentum_pct || base_effect || ln_base_effect
-  need_level_prev_year      <- level_prev_year || growth_rate || ln_growth_rate || contribution_growth_rate || contribution_growth_rate_pct || delta_growth_rate || delta_ln_growth_rate
+  need_level_prev_prd        <- level_prev_prd || momentum || ln_momentum || contribution_momentum || contribution_momentum_pct || base_effect || ln_base_effect
+  need_level_prev_year       <- level_prev_year || growth_rate || ln_growth_rate || contribution_growth_rate || contribution_growth_rate_pct || delta_growth_rate || delta_ln_growth_rate
 
-  need_growth_rate          <- growth_rate || growth_rate_prev_prd || delta_growth_rate || contribution_growth_rate || contribution_growth_rate_pct
-  need_ln_growth_rate       <- ln_growth_rate || ln_growth_rate_prev_prd || delta_ln_growth_rate
-  need_momentum             <- momentum || contribution_momentum || contribution_momentum_pct
-  need_ln_momentum          <- ln_momentum || base_effect || ln_base_effect
+  need_growth_rate           <- growth_rate || growth_rate_prev_prd || delta_growth_rate || contribution_growth_rate || contribution_growth_rate_pct
+  need_ln_growth_rate        <- ln_growth_rate || ln_growth_rate_prev_prd || delta_ln_growth_rate
+  need_momentum              <- momentum || contribution_momentum || contribution_momentum_pct
+  need_ln_momentum           <- ln_momentum || base_effect || ln_base_effect
 
-  need_share_pct            <- share_pct || share_prev_prd || share_prev_year || contribution_growth_rate || contribution_momentum || contribution_growth_rate_pct || contribution_momentum_pct
-  need_share_prev_prd       <- share_prev_prd || contribution_momentum || contribution_momentum_pct
-  need_share_prev_year      <- share_prev_year || contribution_growth_rate || contribution_growth_rate_pct
+  need_share_pct             <- share_pct || share_prev_prd || share_prev_year || contribution_growth_rate || contribution_momentum || contribution_growth_rate_pct || contribution_momentum_pct
+  need_share_prev_prd        <- share_prev_prd || contribution_momentum || contribution_momentum_pct
+  need_share_prev_year       <- share_prev_year || contribution_growth_rate || contribution_growth_rate_pct
 
-  need_growth_rate_prev_prd <- growth_rate_prev_prd || delta_growth_rate
-  need_ln_growth_prev_prd   <- ln_growth_rate_prev_prd || delta_ln_growth_rate
+  need_growth_rate_prev_prd  <- growth_rate_prev_prd || delta_growth_rate
+  need_ln_growth_prev_prd    <- ln_growth_rate_prev_prd || delta_ln_growth_rate
 
   # ---- Time references ----
   dat <- dat %>%
@@ -414,6 +414,94 @@ compute_deflator_metrics <- function(
 }
 
 # =============================================================================
+# compute_metrics (Wrapper function)
+# =============================================================================
+# Acts as a unified entry point, routing requests to `compute_metrics_part`
+# or `compute_deflator_metrics` depending on the parameters provided.
+# =============================================================================
+
+compute_metrics <- function(
+    dat,
+    level_prev_prd               = FALSE,
+    level_prev_year              = FALSE,
+    growth_rate                  = FALSE,
+    momentum                     = FALSE,
+    ln_growth_rate               = FALSE,
+    ln_momentum                  = FALSE,
+    base_effect                  = FALSE,
+    ln_base_effect               = FALSE,
+    growth_rate_prev_prd         = FALSE,
+    ln_growth_rate_prev_prd      = FALSE,
+    delta_growth_rate            = FALSE,
+    delta_ln_growth_rate         = FALSE,
+    level_parent                 = FALSE,
+    share_pct                    = FALSE,
+    share_prev_prd               = FALSE,
+    share_prev_year              = FALSE,
+    contribution_growth_rate     = FALSE,
+    contribution_momentum        = FALSE,
+    contribution_growth_rate_pct = FALSE,
+    contribution_momentum_pct    = FALSE,
+    annual_contribution          = FALSE,
+    deflator                     = FALSE,
+    deflator_inflation           = FALSE,
+    .compute_all                 = FALSE
+) {
+
+  has_standard <- any(c(
+    level_prev_prd, level_prev_year, growth_rate, momentum, ln_growth_rate,
+    ln_momentum, base_effect, ln_base_effect, growth_rate_prev_prd,
+    ln_growth_rate_prev_prd, delta_growth_rate, delta_ln_growth_rate,
+    level_parent, share_pct, share_prev_prd, share_prev_year,
+    contribution_growth_rate, contribution_momentum, contribution_growth_rate_pct,
+    contribution_momentum_pct, annual_contribution
+  ))
+
+  has_deflator <- any(c(deflator, deflator_inflation))
+
+  if (has_standard && has_deflator) {
+    stop("Cannot compute standard metrics and deflator metrics simultaneously. Deflator metrics require matching real and nominal pairs, while standard metrics do not. Please calculate them in separate calls.", call. = FALSE)
+  }
+
+  if (has_deflator) {
+    return(compute_deflator_metrics(
+      dat                = dat,
+      deflator           = deflator,
+      deflator_inflation = deflator_inflation,
+      .compute_all       = .compute_all
+    ))
+  }
+
+  # Default fallback routes to compute_metrics_part
+  return(compute_metrics_part(
+    dat                          = dat,
+    level_prev_prd               = level_prev_prd,
+    level_prev_year              = level_prev_year,
+    growth_rate                  = growth_rate,
+    momentum                     = momentum,
+    ln_growth_rate               = ln_growth_rate,
+    ln_momentum                  = ln_momentum,
+    base_effect                  = base_effect,
+    ln_base_effect               = ln_base_effect,
+    growth_rate_prev_prd         = growth_rate_prev_prd,
+    ln_growth_rate_prev_prd      = ln_growth_rate_prev_prd,
+    delta_growth_rate            = delta_growth_rate,
+    delta_ln_growth_rate         = delta_ln_growth_rate,
+    level_parent                 = level_parent,
+    share_pct                    = share_pct,
+    share_prev_prd               = share_prev_prd,
+    share_prev_year              = share_prev_year,
+    contribution_growth_rate     = contribution_growth_rate,
+    contribution_momentum        = contribution_momentum,
+    contribution_growth_rate_pct = contribution_growth_rate_pct,
+    contribution_momentum_pct    = contribution_momentum_pct,
+    annual_contribution          = annual_contribution,
+    .compute_all                 = .compute_all
+  ))
+}
+
+
+# =============================================================================
 # compute_standard_metrics
 # =============================================================================
 # Orchestrates full metric computation including deflator metrics.
@@ -436,7 +524,8 @@ compute_standard_metrics <- function(tdl) {
 
   dat_orig <- tdl$data
 
-  tdl$data <- compute_metrics(dat_orig, .compute_all = TRUE)
+  # Uses the compute_metrics_part directly since this orchestrates them separately
+  tdl$data <- compute_metrics_part(dat_orig, .compute_all = TRUE)
 
   dat_defl <- compute_deflator_metrics(dat_orig, .compute_all = TRUE)
 

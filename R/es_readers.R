@@ -734,3 +734,17 @@ es_convert <- function(dat){
 
 }
 
+#' Convert e-Sankhyiki GDP/GVA Data to TDF Long Format
+#'
+#' @description
+#' Transforms raw annual or quarterly e-Sankhyiki data (such as Gross Value Added
+#' or Gross Domestic Product) into a standardized \code{tdf_long} object.
+#'
+#' @param dat A data frame containing the raw e-Sankhyiki data.
+#'
+#' @return An object of class \code{tdf_long}.
+#' @export
+convert_es_data <- function(dat){
+  as_tdf_long(es_convert(dat))
+}
+

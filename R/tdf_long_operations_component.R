@@ -135,12 +135,41 @@ aggregate_component_part <- function(tdl){
 
 }
 
+#' Attach a Parent Disaggregation Layer
+#'
+#' @description
+#' Attaches parent disaggregation metadata to the current dataset. This utility
+#' is essential for calculating relative macroeconomic metrics, such as a component's
+#' share or its contribution to the growth of an aggregate measure
+#' (e.g., calculating the contribution of a specific industry to overall GVA growth).
+#'
+#' @param .data A data frame or tibble (typically a `tdf_long` object) containing the component data.
+#' @param parent_disaggregation_layer A character string specifying the name of the parent disaggregation layer to attach.
+#' @param ... Additional arguments passed to specific S3 methods.
+#'
+#' @return An object of the same class as `.data` with the parent disaggregation layer metadata attached.
+#' @export
+attach_parent <- function(.data, parent_disaggregation_layer, ...){
+  UseMethod("attach_parent")
+}
 
-attach_parent <- function(tdl, parent_disaggregation_layer){
+#' @export
+attach_parent.tdf_long <- function(.data, parent_disaggregation_layer, ...){
+  tdl_interim <- to_tdf_long_list(.data)
+  tdl_interim_out <- attach_parent(tdl_interim, parent_disaggregation_layer, ...)
+  as_tdf_long(tdl_interim_out)
+}
+
+#' @export
+attach_parent.tdf_long_list <- function(tdl, parent_disaggregation_layer, ...){
 
   tdf_long_check_shallow(tdl)
 
   hmap <- tdl$hmap
+
+  if(NROW(hmap) == 0) {
+    stop("Not possible to attach! (No H-map)", call. = FALSE)
+  }
 
   hmap_info <- hmap_get_stats(hmap)
 

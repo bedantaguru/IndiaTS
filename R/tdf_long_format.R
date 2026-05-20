@@ -1,6 +1,48 @@
 
+#' @export
+as_tdf_long <- function(.data, .hmap = NULL, ...){
+  UseMethod("as_tdf_long")
+}
 
-tdf_long_check_structure  <- function(dat, hmap, add_latest = FALSE, retain_known_disaggregation_groups_only = FALSE){
+#' @export
+as_tdf_long.tbl <- function(.data, .hmap = NULL, ...){
+
+  if(is.null(.hmap)){
+    .hmap <- tibble::tibble()
+  }
+
+  d1 <- tdf_long_check_structure(dat = .data, hmap = .hmap)
+
+  d2 <- tibble_with_attrs(d1, hmap = .hmap)
+  class(d2) <- tdf_long_class
+  d2
+}
+
+#' @export
+as_tdf_long.data.frame <- as_tdf_long.tbl
+
+#' @export
+as_tdf_long.tdf_long_list <- function(.data, ...){
+  # Here .hmap will be completely ignored even if passed as .data is tdf_long_list object
+  as_tdf_long.tbl(.data = dplyr::as_tibble(.data$data), .hmap = dplyr::as_tibble(.data$hmap), ...)
+}
+
+# Helpers
+
+to_tdf_long_list <- function(tdf_long_obj){
+  tdf_long_make(
+    dat = dplyr::as_tibble(tdf_long_obj),
+    hmap = attr(tdf_long_obj, "hmap"),
+    add_latest = FALSE,
+    minimal = TRUE,
+    retain_known_disaggregation_groups_only = FALSE)
+}
+
+# Functions for tdf_long_list (actual back-end it was initially designed for)
+tdf_long_check_structure  <- function(
+    dat, hmap,
+    add_latest = FALSE,
+    retain_known_disaggregation_groups_only = FALSE){
 
   if(is.list(dat) && !is.data.frame(dat)){
     if(!all(c("data", "hmap") %in% names(dat))){
@@ -81,7 +123,11 @@ tdf_long_cast_required_cols <- function(dat){
 
 tdf_long_release_tag_task <- function(dat, add_latest = FALSE){
 
-  dat2 <- dat %>% filter(meta.release_tag != "#main")
+  if(add_latest){
+    dat2 <- dat %>% filter(meta.release_tag != "#main")
+  } else {
+    dat2 <- dat
+  }
 
   if(NROW(dat2)==0) return(dat)
 
@@ -127,7 +173,9 @@ tdf_long_release_tag_task <- function(dat, add_latest = FALSE){
     }
 
   } else {
-    dat2 <- dat2 %>% mutate(meta.release_tag = "#main")
+    if(add_latest){
+      dat2 <- dat2 %>% mutate(meta.release_tag = "#main")
+    }
   }
 
   return(dat2)
@@ -140,6 +188,14 @@ tdf_long_hierarchy_map_task <- function(
     retain_known_disaggregation_groups_only = FALSE) {
   known_dgs <- colnames(hmap)
   data_dgs <- dat$meta.disaggregation_group %>% unique()
+
+  if(is.data.frame(hmap)){
+    if(NROW(hmap)==0){
+      # Early return as there is nothing to validate
+      # All next dependent methods will be skipping if hmap is empty
+      return(dat)
+    }
+  }
 
   if(!("indicator" %in% colnames(hmap))){
     stop("Hierarchy map must have an 'indicator' column representing the indicator level. Please check the hierarchy_map.", call. = FALSE)

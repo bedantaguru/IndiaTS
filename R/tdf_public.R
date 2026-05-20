@@ -207,7 +207,6 @@ sort.tdf <- function(x, decreasing = FALSE, ...){
 #' to_ts(x)
 #'
 #' @name to_ts
-#' @export
 to_ts <- function(tdf_obj){
 
   tdf_obj <- sort(tdf_obj)
