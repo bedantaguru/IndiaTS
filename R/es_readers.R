@@ -227,7 +227,9 @@ es_convert_gva_common <- function(
     time_fn,                       # function(dat) returns vector 'time'
     remove_empty_cat_cols = FALSE, # logical: do annual-style rem_cats pruning
     use_rev_meta = FALSE,          # logical: attach rev_meta (annual)
-    static_revision_tag = NULL     # used for quarterly to set revision
+    add_na_in_rev_meta =  TRUE,    # logical: treat NA as valid revision (back series)
+    static_revision_tag = NULL,    # used for quarterly to set revision
+    auto_discard_extra_cols  = TRUE# used for deletion of extra cols after checking no variation being caused by them
 ) {
   # load hmap if needed
   if (missing(hmap) || is.null(hmap)) {
@@ -246,6 +248,27 @@ es_convert_gva_common <- function(
          "\nMissing columns are: ",
          paste0(setdiff(required_cols, colnames(dat)), collapse = ", "),
          call. = FALSE)
+  }
+
+  if(auto_discard_extra_cols) {
+    extra_cols <- setdiff(colnames(dat), expected_cols)
+    if(length(extra_cols)>0){
+      grp_cols <- intersect(
+        c("base_year", "year", "revision", "indicator",
+          "industry", "subindustry", "institutional_sector", "quarter"),
+        colnames(dat)
+      )
+
+      vars_this <- dat |> dplyr::group_by(dplyr::across(all_of(grp_cols))) |> cols_causing_group_variation()
+
+      if(length(vars_this)==0) {
+        # This means the extra columns holds no additional information and can be dropped safely.
+        dat <- dat |> dplyr::select(-all_of(extra_cols))
+      }
+
+      # if not possible to drop it will be flagged in next step
+
+    }
   }
 
   if (!all(colnames(dat) %in% expected_cols)) {
@@ -269,8 +292,23 @@ es_convert_gva_common <- function(
     if(!("revision" %in% colnames(dat))) {
       stop("Revision metadata validation requested but no 'revision' column found in the data.", call. = FALSE)
     }
-    rev_meta <- es_load_predefined_data("revision_meta") %>%
+
+    rev_meta <- es_load_predefined_data("revision_meta")
+
+    if(add_na_in_rev_meta){
+      rev_meta_dlt <- rev_meta[1,]
+      rev_meta_dlt$revision <- "AsIs"
+      rev_meta_dlt$release_order <- 0
+      rev_meta <- dplyr::bind_rows(rev_meta_dlt, rev_meta) |> dplyr::distinct()
+
+      # Here modifying the data from NA to AsIS
+      dat <- dat |> dplyr::mutate(revision = ifelse(is.na(revision), "AsIs", revision))
+
+    }
+
+    rev_meta <- rev_meta %>%
       mutate(revision_clean = str_clean(revision))
+
 
     non_present_revs <- dat$revision %>% str_clean %>% unique %>% setdiff(rev_meta$revision_clean)
     if (length(non_present_revs) > 0) {
@@ -523,7 +561,6 @@ es_convert_gva_annual <- function(dat, hmap) {
 #'   containing columns such as `time`, `meta.release_tag`, `meta.release_order`,
 #'   `meta.price_basis`, `meta.unit`, `meta.name`, `meta.disaggregation_group`,
 #'   and `value.level`.
-#' @export
 es_convert_gva <- function(dat, hmap, freq){
   if (missing(hmap) || is.null(hmap)) {
     hmap <- es_load_predefined_data("hmap_gva")
@@ -555,15 +592,19 @@ es_convert_gva <- function(dat, hmap, freq){
 
 }
 
-# TODO: This needs to be done nicely. Now doing it for this IDG
-es_convert_gdp <- function(dat, hmap = NULL, freq) {
+# TODO: This needs to be done nicely.
+es_convert_gdp <- function(dat, hmap = NULL, freq,
+                           # As Discrepancies ar not always given in ES
+                           exclude_discrepancies = TRUE) {
 
   if (missing(hmap) || is.null(hmap)) {
     hmap <- es_load_predefined_data("hmap_gdp")
+    if(exclude_discrepancies){
+      hmap <- hmap |> dplyr::filter(!(str_clean(demand_side_components) |> str_detect("discre")))
+    }
   }
 
   if (missing(freq)) {
-
     if (!"frequency" %in% colnames(dat)) {
       stop(
         "Frequency not specified and no 'frequency' column found in the data. Please specify 'quarterly' or 'annual', or include a 'frequency' column.",
@@ -644,5 +685,52 @@ es_prepare_gdp_data <- function(dat, hmap, freq = c("quarterly", "annual")) {
   # Final cleanup
   dat %>%
     dplyr::mutate(institutional_sector = NA_character_)
+}
+
+
+# should be es_convert_to_tdf_long_list
+es_convert <- function(dat){
+  hmgva <- es_load_predefined_data("hmap_gva")
+  hmgdp <- es_load_predefined_data("hmap_gdp")
+
+  is_gva <- FALSE
+  is_gdp <- FALSE
+
+  colnames(dat) <- tolower(colnames(dat))
+
+  if("industry" %in% colnames(dat)){
+    if(length(unique(dat$indicator))<3 && length(unique(dat$industry))>7){
+      chk <- mean(str_clean(dat$industry) %in% str_clean(hmgva |> unlist() |> as.character()))
+      if(chk > 0.8) {
+        is_gva <- TRUE
+        is_gdp <- FALSE
+      }
+    }
+  }
+
+  if(("indicator" %in% colnames(dat)) && !("industry" %in% colnames(dat))){
+    if(length(unique(dat$indicator))>7){
+      chk <- mean(str_clean(dat$indicator) %in% str_clean(hmgdp |> unlist() |> as.character()))
+      if(chk > 0.8) {
+        is_gva <- FALSE
+        is_gdp <- TRUE
+      }
+    }
+  }
+
+  if(!is_gva && !is_gdp){
+    stop("Unable to determine GVA or GDP!", call. = FALSE)
+  }
+
+  if(is_gva){
+    return(
+      es_convert_gva(dat)
+    )
+  } else if (is_gdp) {
+    return(
+      es_convert_gdp(dat)
+    )
+  }
+
 }
 

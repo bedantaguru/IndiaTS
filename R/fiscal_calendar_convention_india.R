@@ -305,6 +305,27 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   }
 
   # --------------------------------------------------
+  # 1b. Full range: YYYY-YYYY or YYYY–YYYY
+  #     Valid only if second year == first year + 1
+  # --------------------------------------------------
+  m_full <- stringr::str_match(
+    x,
+    stringr::regex("(\\d{4})\\s*(?:-|–)\\s*(\\d{4})", ignore_case = TRUE)
+  )
+  has_full <- is.na(out) & !is.na(m_full[, 1])
+  if (any(has_full)) {
+    y1 <- as.integer(m_full[has_full, 2])
+    y2 <- as.integer(m_full[has_full, 3])
+    ok <- y2 == y1 + 1
+    idx <- which(has_full)[ok]
+    out[idx] <- paste0(
+      y1[ok],
+      "-",
+      sprintf("%02d", y2[ok] %% 100)
+    )
+  }
+
+  # --------------------------------------------------
   # 2. Two-digit year range: XX-XX or XX–XX
   #    Valid only if second year == (first year + 1) %% 100
   # --------------------------------------------------
@@ -312,21 +333,18 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
     x,
     stringr::regex("^\\s*(\\d{2})\\s*(?:-|–)\\s*(\\d{2})\\s*$", ignore_case = TRUE)
   )
+
   has_2digit <- is.na(out) & !is.na(m_2digit[, 1])
   if (any(has_2digit)) {
     yy1 <- as.integer(m_2digit[has_2digit, 2])  # First YY
     yy2 <- as.integer(m_2digit[has_2digit, 3])  # Second YY
-
     # Validate that it's consecutive years
     ok <- yy2 == (yy1 + 1) %% 100
-
     if (any(ok)) {
       current_year <- as.integer(format(.current_fixed_date, "%Y"))
       current_cc   <- current_year %/% 100
       current_yy   <- current_year %% 100
-
       yy1_valid <- yy1[ok]
-
       # Century inference using same logic as FYxx
       cc <- if (fy_over_two_century) {
         # If yy1 is <= current_yy + 18, assume current century, else previous
@@ -334,9 +352,7 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
       } else {
         rep(current_cc, length(yy1_valid))
       }
-
       start_year <- cc * 100 + yy1_valid
-
       idx <- which(has_2digit)[ok]
       out[idx] <- paste0(
         start_year,

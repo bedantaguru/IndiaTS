@@ -22,6 +22,7 @@ test_that("gva splicing test", {
   tlq_real <- tlq
   tlq_real$data <- tlq_real$data %>% filter(str_detect(meta.price_basis, "real"))
 
+  sp0 <- splice_series(tla_real)
   sp1 <- splice_series(tlq_real)
   sp2 <- splice_series(
     tlq_real,

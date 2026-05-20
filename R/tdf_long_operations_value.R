@@ -2,18 +2,33 @@
 # Utility helpers (numerical safety)
 # =============================================================================
 
+#  TODO change from al ifelse to dplyr::if_else
+
 safe_divide <- function(num, den) {
-  ifelse(is.na(den) | den == 0, NA_real_, num / den)
+  # Sanitize the denominator to avoid division by zero
+  den_safe <- if_else(is.na(den) | den == 0, NA_real_, as.numeric(den))
+
+  num / den_safe
 }
 
 safe_log_ratio <- function(num, den) {
   ratio <- safe_divide(num, den)
-  ifelse(!is.na(ratio) & ratio > 0, log(ratio), NA_real_)
+
+  # Sanitize the ratio before logging to prevent warnings from log(<= 0)
+  ratio_safe <- if_else(is.na(ratio) | ratio <= 0, NA_real_, as.numeric(ratio))
+
+  log(ratio_safe)
 }
 
 safe_pct <- function(x) {
   s <- sum(x, na.rm = TRUE)
-  ifelse(s == 0, NA_real_, x / s * 100)
+
+  # Use a standard 'if' for the scalar check to avoid if_else recycling errors
+  if (is.na(s) || s == 0) {
+    rep(NA_real_, length(x))
+  } else {
+    (x / s) * 100
+  }
 }
 
 # =============================================================================
@@ -120,6 +135,24 @@ compute_metrics <- function(
   )
 
   id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
+
+  missing_id_cols <- setdiff(id_cols, colnames(dat))
+  if (length(missing_id_cols) > 0) {
+    dat[missing_id_cols] <- "dummy"
+    if(dat$meta.release_tag[1]=="dummy" && length(unique(dat$meta.release_tag))==1){
+      dat$meta.release_tag <- "#main"
+    }
+
+    # Check if dummy creation is meaningful
+    chk_dummy_cols_creation <- dat |>
+      dplyr::group_by(dplyr::across(all_of(unique(c("time", id_cols))))) |>
+      cols_causing_group_variation()
+
+    if(length(chk_dummy_cols_creation)>0){
+      stop("Failed to create dummy ID columns. Check if required `meta.*` columns were accidentally dropped.", call. = FALSE)
+    }
+  }
+
   join_keys_same <- setNames(id_cols, id_cols)
 
   has_parent <- all(c("meta.parent", "meta.parent_disaggregation_group") %in% colnames(dat))
@@ -290,7 +323,11 @@ compute_metrics <- function(
   dat <- dat %>% rename(dplyr::all_of(rename_map))
 
   # ---- Final cleanup ----
-  dat %>% select(-dplyr::starts_with(".time_"), -dplyr::starts_with(".value."))
+  dat %>% select(
+    -dplyr::starts_with(".time_"),
+    -dplyr::starts_with(".value."),
+    -dplyr::any_of(missing_id_cols)
+  )
 }
 
 # =============================================================================

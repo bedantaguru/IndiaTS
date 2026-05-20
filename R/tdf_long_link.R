@@ -3,6 +3,14 @@
 # This functions adds meta.low_freq_time to High Frequency tdl
 tdf_long_temporal_link <- function(tdl1 , tdl2){
 
+  g1 <- tdl1$data |> dplyr::distinct(meta.name, meta.disaggregation_group)
+  g2 <- tdl2$data |> dplyr::distinct(meta.name, meta.disaggregation_group)
+  chk <- g1 |> dplyr::inner_join(g2, by = c("meta.name", "meta.disaggregation_group"))
+
+  if(NROW(chk)==0){
+    stop("Temporal link not possible as no common name present!", call. = FALSE)
+  }
+
   fq1 <- frequency.tdf_long_list(tdl1)
   fq2 <- frequency.tdf_long_list(tdl2)
 
