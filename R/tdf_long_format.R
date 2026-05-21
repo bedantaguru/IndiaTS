@@ -23,8 +23,18 @@ as_tdf_long.data.frame <- as_tdf_long.tbl
 
 #' @export
 as_tdf_long.tdf_long_list <- function(.data, ...){
-  # Here .hmap will be completely ignored even if passed as .data is tdf_long_list object
-  as_tdf_long.tbl(.data = dplyr::as_tibble(.data$data), .hmap = dplyr::as_tibble(.data$hmap), ...)
+  # Here .hmap will be completely ignored even if passed as .data is
+  # tdf_long_list object This is porper but since tdf_long_list is already
+  # validated entry this furthe check may be avoided : Kepping for reference :
+  #
+  # as_tdf_long.tbl(.data = dplyr::as_tibble(.data$data), .hmap =
+  # dplyr::as_tibble(.data$hmap), ...)
+  dout <- tibble_with_attrs(
+    dplyr::as_tibble(.data$data),
+    hmap = dplyr::as_tibble(.data$hmap))
+  class(dout) <- tdf_long_class
+  dout
+
 }
 
 # Helpers

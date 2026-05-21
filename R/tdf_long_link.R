@@ -1,4 +1,51 @@
 
+#' Temporally Link Time Series Data of Different Frequencies
+#'
+#' @description
+#' Connects two \code{tdf_long} objects that contain the same data at different
+#' frequencies (e.g., quarterly and annual series).
+#'
+#' @details
+#' This function creates a temporal link between a high-frequency and a
+#' low-frequency dataset. It is primarily used to prepare datasets for further
+#' operations such as benchmarking, implied figure (Implicit) calculation, and other
+#' mixed-frequency tasks.
+#'
+#' For example, it can be used to link quarterly and annual GDP/GVA series.
+#' The function automatically identifies which input is high-frequency and which
+#' is low-frequency, and adds a \code{meta.low_freq_time} column to the
+#' high-frequency dataset to map it to the corresponding low-frequency period.
+#'
+#' @param tl1 A \code{tdf_long} object containing time series data.
+#' @param tl2 A \code{tdf_long} object containing the same data at a different frequency.
+#'
+#' @return A list containing the two linked \code{tdf_long} objects, structurally
+#' separated into \code{low_freq} and \code{high_freq} components.
+#'
+#' @export
+temporal_link <- function(tl1, tl2){
+  UseMethod("temporal_link")
+}
+
+#' @export
+temporal_link.tdf_long <- function(tl1, tl2){
+  if(!inherits(tl1,"tdf_long") || !inherits(tl2,"tdf_long")) {
+    stop("Both inputs are required to be of <tdf_long> class", call. = FALSE)
+  }
+  tl1l <- to_tdf_long_list(tl1)
+  tl2l <- to_tdf_long_list(tl2)
+  tlll <- tdf_long_temporal_link(tl1l, tl2l)
+  tlll |> purrr::map(as_tdf_long)
+}
+
+#' @export
+temporal_link.tdf_long_list <- function(tl1, tl2){
+  if(!inherits(tl1,"tdf_long_list") || !inherits(tl2,"tdf_long_list")) {
+    stop("Both inputs are required to be of <tdf_long_list> class", call. = FALSE)
+  }
+  tdf_long_temporal_link(tl1, tl2)
+}
+
 
 # This functions adds meta.low_freq_time to High Frequency tdl
 tdf_long_temporal_link <- function(tdl1 , tdl2){
@@ -217,4 +264,54 @@ linked_tdf_long_tally <- function(linked_tdl) {
 
 }
 
+
+#' Compute Implied High-Frequency Estimates
+#'
+#' @description
+#' Calculates missing high-frequency observations (e.g., a Q4 residual) by
+#' subtracting existing high-frequency periods (e.g., Q1-Q3) from the
+#' corresponding low-frequency benchmark total (e.g., Annual First Advance Estimates).
+#'
+#' @details
+#' This function operates on a temporally linked pair of \code{tdf_long} objects.
+#' It scans the data for low-frequency benchmark periods where exactly one
+#' high-frequency observation is missing. When it finds such a case, it computes
+#' the implied (residual) value for that missing period and appends it to the
+#' high-frequency dataset while preserving primary-key uniqueness.
+#'
+#' If no such cases exist (i.e., high-frequency periods are fully complete or
+#' missing more than one observation per benchmark group), the dataset is
+#' returned unchanged.
+#'
+#' @param linked_tdf_long A named list containing two \code{tdf_long} objects.
+#' Must specifically contain nodes named \code{"low_freq"} and \code{"high_freq"}.
+#' This is typically the direct output of \code{temporal_link()}.
+#'
+#' @return A list identical in structure to the input \code{linked_tdf_long},
+#' but with the newly calculated implied figures appended to the \code{high_freq}
+#' \code{tdf_long} data frame.
+#'
+#' @export
+compute_implied <- function(linked_tdf_long){
+
+  # Validation: Ensure the input is a list with the exact required structure
+  if (!is.list(linked_tdf_long) || !all(c("low_freq", "high_freq") %in% names(linked_tdf_long))) {
+    stop("`linked_tdf_long` must be a named list containing exactly 'low_freq' and 'high_freq' elements. Expected output from `temporal_link()`.", call. = FALSE)
+  }
+
+  # Validation: Ensure both nodes are specifically of the public <tdf_long> class
+  if (!inherits(linked_tdf_long$low_freq, "tdf_long") || !inherits(linked_tdf_long$high_freq, "tdf_long")) {
+    stop("Both the 'low_freq' and 'high_freq' elements of the list must be of class <tdf_long>.", call. = FALSE)
+  }
+
+  # Convert public tdf_long objects to internal tdf_long_list format
+  ltdl <- linked_tdf_long |> purrr::map(to_tdf_long_list)
+
+  # Perform the implied figure calculation
+  ltdlo <- linked_tdf_long_implied_figures(ltdl)
+
+  # Convert back to public tdf_long objects before returning
+  ltdlo |> purrr::map(as_tdf_long)
+
+}
 

@@ -1,6 +1,58 @@
 
+
+#' Splice Time Series Across Different Price Bases
+#'
+#' @description
+#' Connects and aligns time series data that have undergone a base year revision
+#' (or change in price basis) to create a single, continuous historical series.
+#'
+#' @details
+#' This function takes a dataset containing exactly two distinct price bases
+#' (e.g., an old base year and a new base year) and splices the historical series
+#' onto the target series.
+#'
+#' The splicing operation calculates an \code{avg_linking_factor} based on the
+#' overlapping periods between the two series. If the data is sub-annual and
+#' contains full seasonal cycles in the overlap, it computes season-specific
+#' linking factors (e.g., separate factors for Q1, Q2, Q3, and Q4). Otherwise,
+#' it computes a single, flat linking factor.
+#'
+#' The historical series is multiplied by this linking factor, and the newly
+#' extended historical periods are appended to the target series. A new boolean
+#' column, \code{meta.is_spliced}, is added to the output to flag the back-casted
+#' (converted) observations.
+#'
+#' @param tdl A \code{tdf_long} object containing the time-series data.
+#' The data must contain exactly two distinct values in the \code{meta.price_basis} column.
+#' @param target_price_basis A character string specifying which price basis
+#' should be retained as the benchmark (usually the newer base year). If left
+#' as \code{NULL}, the function automatically defaults to the price basis that
+#' contains the most recent time period.
+#' @param ... Additional arguments passed to methods.
+#'
+#' @return A \code{tdf_long} object containing the spliced, continuous time series.
+#' The original \code{meta.price_basis} dimension is collapsed to the target basis,
+#' and a new column \code{meta.is_spliced} is added to track which rows were mathematically converted.
+#'
+#' @export
+splice_series <- function(tdl, target_price_basis = NULL, ...){
+  UseMethod("splice_series")
+}
+
+#' @export
+splice_series.tdf_long <- function(tdl, target_price_basis = NULL, return_diagnostics = FALSE, ...){
+  tdl |>
+    to_tdf_long_list() |>
+    splice_series.tdf_long_list(
+      target_price_basis = target_price_basis,
+      return_diagnostics = return_diagnostics, ...) |>
+    as_tdf_long()
+}
+
+
 #  It takes two price basis tdf-long form
-splice_series <- function(tdl, target_price_basis){
+#' @export
+splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_diagnostics = FALSE, ...){
 
   tdf_long_check_structure(tdl)
 
@@ -18,7 +70,7 @@ splice_series <- function(tdl, target_price_basis){
     warning("The provided tdf_long_list object contains two price bases, but they contain 'real' and 'nominal' in their names. This may lead to ambiguity in splicing. (Choose either).", call. = FALSE)
   }
 
-  if(missing(target_price_basis)){
+  if(missing(target_price_basis) || is.null(target_price_basis)){
     px <- pbs %>% dplyr::arrange(dplyr::desc(max_time), n_times) %>%
       pull(meta.price_basis)
     target_price_basis <- px[1]
@@ -72,7 +124,7 @@ splice_series <- function(tdl, target_price_basis){
       avg_linking_factor = mean(linking_factor),
       qd_linking_factor = quartile_deviation(linking_factor), .groups = "drop")
 
-  #  more less this number is that good the series is : mean(cx$qd_linking_factor)
+  # more less this number is that good the series is : mean(cx$qd_linking_factor)
 
   # many release vintage will not gt any value so extending cx
   cx_ext <- cx %>%
@@ -114,6 +166,7 @@ splice_series <- function(tdl, target_price_basis){
     mutate(df = abs((value.level/value.level_spliced-1)))
 
   # Check this mean(series_bench$df)*100
+  if(return_diagnostics) return(series_bench)
 
   series_converted <- series_converted %>%
     anti_join(

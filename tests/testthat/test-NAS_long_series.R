@@ -120,3 +120,75 @@ test_that("NAS long series works", {
   expect_lt(mean(chk45_ok$dlt, na.rm = TRUE), 1)
 
 })
+
+
+test_that("NAS long series works on public functions", {
+
+  nas_full <- readRDS(test_path("testdata", "gdp_gva_long.rds"))
+
+  n0 <- nas_full |> purrr::map_depth(2, convert_es_data)
+
+  implied_vals <- function(nd){
+
+    nd <- nd |> purrr::map(~.x |> filter(str_detect(meta.price_basis, "real")))
+
+    tlink <-  temporal_link(nd$annual, nd$quarterly)
+
+    qa <- compute_implied(tlink)
+
+    ol <- list()
+
+    ol$quarterly <- qa$high_freq |> aggregate(type = "component")
+
+    # aggregate(type = "component") is by deafult same as aggregate
+    # Testing that too
+    ol$annual <- tla <- qa$low_freq |> aggregate()
+
+    ol
+  }
+
+  nf <- n0 |> purrr::map(implied_vals)
+
+  sp_gva <- splice_series(nf$gva$annual)
+  sp_gdp <- splice_series(nf$gdp$annual)
+
+  # Quarterly series GVA
+
+  dchk1 <- nf$gva$quarterly |>
+    filter(meta.release_tag=="#main", meta.disaggregation_group == "indicator") |>
+    group_by(meta.low_freq_time, meta.price_basis) |>
+    mutate(n_qtrs = n_distinct(fiscal_quarter(time, with_year = FALSE))) |>
+    filter(n_qtrs==4) |>
+    group_by(meta.low_freq_time) |>
+    filter(meta.price_basis == max(meta.price_basis)) |>
+    dplyr::arrange(as.Date(time)) |> ungroup() |> select(-n_qtrs) |>
+    compute_metrics(annual_contribution = TRUE)
+
+  dchk2 <- dchk1 |>
+    select(time, meta.price_basis, value.level, value.annual_contribution, year = meta.low_freq_time) |>
+    left_join(
+      sp_gva |>
+        filter(meta.release_tag=="#main", meta.disaggregation_group == "indicator") |>
+        select(year = time, value.level_yr = value.level), by = c("year"))
+
+  dchk2 <- dchk2 |> mutate(value.splice_level = value.level_yr*value.annual_contribution/100)
+
+  dchk3 <- dchk2 |> mutate(meta.price_basis = sp_gva$meta.price_basis[1]) |>
+    select(time, value.level = value.splice_level, meta.price_basis) |>
+    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = T)
+
+  dchk4 <- dchk1 |> select(time, value.level, pbase = meta.price_basis) |> compute_metrics(growth_rate = TRUE)
+
+  dchk5 <- dchk3 |> dplyr::left_join(dchk4, by = "time", suffix = c("","_asis")) |>
+    mutate(dlt = abs(value.growth_rate - value.growth_rate_asis) |> round(0)) |>
+    mutate(pyr = pbase |> fiscal_year(), yr = time |> fiscal_year())
+
+  dchk5_bad <- dchk5 |> filter(pyr==yr)
+  dchk5_ok <- dchk5 |> filter(pyr!=yr)
+
+  expect_gt(mean(dchk5_bad$dlt), 15)
+
+  expect_lt(mean(dchk5_ok$dlt, na.rm = TRUE), 1)
+
+
+})

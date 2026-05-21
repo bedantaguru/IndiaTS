@@ -341,7 +341,8 @@ compute_deflator_metrics <- function(
     dat,
     deflator           = FALSE,
     deflator_inflation = FALSE,
-    .compute_all       = FALSE
+    .compute_all       = FALSE,
+    .blank_for_real_nominal_missing = FALSE
 ) {
 
   if (.compute_all) {
@@ -362,6 +363,25 @@ compute_deflator_metrics <- function(
     -dplyr::starts_with(".value.")
   )
 
+  id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
+
+  missing_id_cols <- setdiff(id_cols, colnames(dat))
+  if (length(missing_id_cols) > 0) {
+    dat[missing_id_cols] <- "dummy"
+    if(dat$meta.release_tag[1]=="dummy" && length(unique(dat$meta.release_tag))==1){
+      dat$meta.release_tag <- "#main"
+    }
+
+    # Check if dummy creation is meaningful
+    chk_dummy_cols_creation <- dat |>
+      dplyr::group_by(dplyr::across(all_of(unique(c("time", id_cols))))) |>
+      cols_causing_group_variation()
+
+    if(length(chk_dummy_cols_creation)>0){
+      stop("Failed to create dummy ID columns. Check if required `meta.*` columns were accidentally dropped.", call. = FALSE)
+    }
+  }
+
   dat_prep <- dat %>%
     mutate(
       meta.price_basis = tolower(meta.price_basis),
@@ -372,7 +392,10 @@ compute_deflator_metrics <- function(
 
   valid <- any(dat_prep$.is_real, na.rm = TRUE) && any(dat_prep$.is_nominal, na.rm = TRUE)
 
-  if (!valid) return(NULL)
+  if (!valid) {
+    if(.blank_for_real_nominal_missing) return(NULL)
+    stop("Not possible to calculate deflator and related measures! (real nominal both needed)", call. = FALSE)
+  }
 
   join_cols <- c("time", "meta.name", "meta.disaggregation_group",
                  "meta.release_tag", "meta.price_basis")
@@ -408,9 +431,16 @@ compute_deflator_metrics <- function(
   rename_map <- setNames(paste0(".", requested_cols), requested_cols)
   rename_map <- rename_map[paste0(".", requested_cols) %in% colnames(dat_defl)]
 
-  dat_defl %>%
+  dat_defl <- dat_defl %>%
     rename(dplyr::all_of(rename_map)) %>%
     select(dplyr::all_of(c(join_cols, intersect(requested_cols, colnames(.)))))
+
+  # ---- Final cleanup ----
+  dat_defl %>% select(
+    -dplyr::starts_with(".time_"),
+    -dplyr::starts_with(".value."),
+    -dplyr::any_of(missing_id_cols)
+  )
 }
 
 # =============================================================================
@@ -420,6 +450,51 @@ compute_deflator_metrics <- function(
 # or `compute_deflator_metrics` depending on the parameters provided.
 # =============================================================================
 
+#' Compute Derived Time-Series Metrics
+#'
+#' @description
+#' A unified entry point to calculate various derived time-series metrics
+#' such as growth rates, momentum, base effects, structural shares, growth contributions,
+#' and deflators.
+#'
+#' @details
+#' The function relies on the presence of a \code{time} column and a \code{value.level}
+#' column within the input data. Depending on the requested metrics, other metadata columns
+#' may be required:
+#' \itemize{
+#'   \item \strong{Shares & Contributions:} Require \code{meta.parent} and
+#'   \code{meta.parent_disaggregation_group} to calculate proportions against a parent total.
+#'   \item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
+#'   "real" and "nominal" pairs to compute the implicit price deflator.
+#' }
+#'
+#' \strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
+#' cannot be computed in the same call because deflator calculations fundamentally reshape
+#' the data by merging real and nominal series. They must be executed in separate calls.
+#'
+#' @param dat A data frame or \code{tdf_long} object containing at least \code{time}
+#' and \code{value.level} columns.
+#'
+#' @param level_prev_prd,level_prev_year Logical. Compute the raw level values of the previous period or previous year.
+#' @param growth_rate,momentum Logical. Compute year-on-year growth rate or period-on-period momentum.
+#' @param ln_growth_rate,ln_momentum Logical. Compute logarithmic versions of growth rate and momentum.
+#' @param base_effect,ln_base_effect Logical. Compute the base effect (negative of previous year's momentum).
+#' @param growth_rate_prev_prd,ln_growth_rate_prev_prd Logical. Extract the growth rate of the previous period.
+#' @param delta_growth_rate,delta_ln_growth_rate Logical. Compute the change in growth rate from the previous period.
+#' @param level_parent Logical. Extract the raw level of the parent component.
+#' @param share_pct,share_prev_prd,share_prev_year Logical. Compute the component's percentage share of the parent total for current, previous period, or previous year.
+#' @param contribution_growth_rate,contribution_momentum Logical. Compute the component's absolute contribution to the parent's growth or momentum.
+#' @param contribution_growth_rate_pct,contribution_momentum_pct Logical. Compute the component's percentage (relative) contribution to the parent's growth or momentum.
+#' @param annual_contribution Logical. Compute the component's share within the annual total.
+#'
+#' @param deflator,deflator_inflation Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE.
+#' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}.
+#'
+#' @return A data frame or \code{tdf_long} object identical to the input, but with
+#' newly appended columns for each requested metric. The new columns will be prefixed
+#' with \code{value.} (e.g., \code{value.growth_rate}).
+#'
+#' @export
 compute_metrics <- function(
     dat,
     level_prev_prd               = FALSE,
@@ -527,7 +602,9 @@ compute_standard_metrics <- function(tdl) {
   # Uses the compute_metrics_part directly since this orchestrates them separately
   tdl$data <- compute_metrics_part(dat_orig, .compute_all = TRUE)
 
-  dat_defl <- compute_deflator_metrics(dat_orig, .compute_all = TRUE)
+  dat_defl <- compute_deflator_metrics(
+    dat_orig,
+    .compute_all = TRUE, .blank_for_real_nominal_missing = TRUE)
 
   if (is.null(dat_defl)) return(list(main = tdl))
 

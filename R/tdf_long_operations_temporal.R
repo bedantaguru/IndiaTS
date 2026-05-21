@@ -1,6 +1,6 @@
 
 
-aggregate_temporal <- function(tdl, to_freq, silent = FALSE){
+aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE){
 
   tdf_long_check_structure(tdl)
 
@@ -17,9 +17,11 @@ aggregate_temporal <- function(tdl, to_freq, silent = FALSE){
     return(invisible(tdl))
   }
 
-  if(missing(to_freq)){
+  if(missing(to_freq) || is.null(to_freq)){
     to_freq <- can_be_aggregated_to[1]
-    message(paste0("Since to_freq not supplied taking to_freq = ", to_freq," !"))
+    if(!silent){
+      message(paste0("Since to_freq not supplied taking to_freq = ", to_freq," !"))
+    }
   }
 
   if(!(to_freq %in% can_be_aggregated_to)){

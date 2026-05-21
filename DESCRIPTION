@@ -28,6 +28,7 @@ Imports:
     purrr,
     tibble,
     stringr,
+    lubridate,
     magrittr
 Suggests: 
     testthat (>= 3.0.0)
