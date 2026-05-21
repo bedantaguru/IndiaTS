@@ -15,3 +15,4 @@
 Re-attaches user attributes from \code{template} onto \code{data} after any
 dplyr verb. Group structure and row names come from \code{NextMethod()}.
 }
+\keyword{internal}
