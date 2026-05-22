@@ -90,6 +90,10 @@ aggregate_component_part <- function(tdl){
 
   hmap <- tdl$hmap
 
+  if(NROW(hmap)==0){
+    stop("Nothing to do here as no hmap is present!", call. = FALSE)
+  }
+
   hmap_info <- hmap_get_stats(hmap)
 
   # For data tracking

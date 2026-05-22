@@ -4,19 +4,60 @@
 \alias{as_tdf}
 \title{Coerce an object to a time-indexed data frame (tdf)}
 \usage{
-as_tdf(df, allow_discontinuous = TRUE, fiscal_type = TRUE)
+as_tdf(
+  df,
+  allow_discontinuous = TRUE,
+  fiscal_type = TRUE,
+  value_name = NULL,
+  names = NULL,
+  disaggregation_group = NULL,
+  divergence_tol_pct = 5,
+  ...
+)
 }
 \arguments{
-\item{df}{A \code{data.frame}, \code{tibble}, or \code{ts} object.
-If a \code{ts} object is supplied, it is first converted using
-\code{ts_to_tdf_part()}.}
+\item{df}{A \code{data.frame}, \code{tibble}, \code{ts}, or \code{tdf_long}
+object. If a \code{ts} object is supplied, it is first converted using
+\code{ts_to_tdf_part()}. If a \code{tdf_long} object is supplied, it is
+filtered, de-duplicated, and pivoted to wide form before conversion.}
 
 \item{allow_discontinuous}{Logical. If \code{FALSE}, a warning is issued
-when the detected time index is not continuous.}
+when the detected time index is not continuous. Used by the
+\code{data.frame} and \code{ts} methods.}
 
 \item{fiscal_type}{Logical. If \code{TRUE}, time conversion attempts are
 performed using fiscal period rules; otherwise calendar period rules
-are used.}
+are used. Used by the \code{data.frame} and \code{ts} methods.}
+
+\item{value_name}{Character scalar. Name of the value column to extract
+from a \code{tdf_long} input, with or without the \code{"value."}
+prefix (e.g. \code{"gdp"} or \code{"value.gdp"}). Matching is
+case-insensitive. If \code{NULL} (default), the first column whose name
+begins with \code{"value."} is used. If more than one name is supplied,
+only the first is used and a warning is issued. Used by the
+\code{tdf_long} method.}
+
+\item{names}{Character vector. Series names (\code{meta.name} values) to
+retain from a \code{tdf_long} input. If \code{NULL} (default), all names
+within the selected \code{disaggregation_group}(s) are retained; if
+\code{disaggregation_group} is also \code{NULL}, every name in the input
+is retained. Used by the \code{tdf_long} method.}
+
+\item{disaggregation_group}{Character vector. Disaggregation group(s)
+(\code{meta.disaggregation_group} values) to retain from a
+\code{tdf_long} input. If \code{NULL} (default) and \code{names} is also
+\code{NULL}, all disaggregation groups are retained. Used by the
+\code{tdf_long} method.}
+
+\item{divergence_tol_pct}{Numeric scalar. Tolerance, in percent, for
+within-\code{(time, meta.name)} value divergence when collapsing
+duplicate observations in a \code{tdf_long} input. Divergence is
+computed as \code{(max - min) / max * 100}. Groups exceeding this
+threshold trigger the variation-reduction strategy (latest release tag
+where orderable, otherwise an averaging fallback with a warning).
+Defaults to \code{5}. Used by the \code{tdf_long} method.}
+
+\item{...}{Additional arguments passed to methods.}
 }
 \value{
 A \code{tdf} object (a tibble inheriting from \code{tdf_class})
@@ -28,16 +69,18 @@ with:
 }
 }
 \description{
-Converts a \code{data.frame} or \code{ts} object into a standardized
-time-indexed data frame (\code{tdf}), where one column represents time
-(date or period) and remaining columns represent numeric variables.
+Converts a \code{data.frame}, \code{ts}, or \code{tdf_long} object into a
+standardized time-indexed data frame (\code{tdf}), where one column
+represents time (date or period) and remaining columns represent numeric
+variables.
 }
 \details{
 The function detects or infers the time column, converts it to either
 a calendar or fiscal period when possible, and attaches metadata
 describing time type and continuity.
 
-The function follows these steps:
+For \code{data.frame} and \code{ts} inputs, the function follows these
+steps:
 \enumerate{
 \item If the input is a \code{ts} object, it is converted to a data frame.
 \item If the input is already a \code{tdf}, it is returned unchanged.
@@ -49,6 +92,13 @@ to represent time and is converted accordingly.
 possible; otherwise it is converted to a \code{Date}.
 \item Continuity of the time index is checked and recorded.
 }
+
+For \code{tdf_long} inputs, the chosen value column is renamed internally,
+rows are filtered by \code{names} and \code{disaggregation_group}, any
+residual within-\code{(time, meta.name)} variation is resolved using
+release-tag ordering (or averaging as a fallback), and the result is
+pivoted to wide form before being passed through the standard conversion
+path.
 
 The input does not need to be ordered; continuity is assessed internally.
 }

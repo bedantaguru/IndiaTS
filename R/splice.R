@@ -58,6 +58,10 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
 
   td <- tdl$data
 
+  if(sum(stringr::str_detect(colnames(td),"value\\.level"))!=1 || !any(colnames(td)=="value.level")){
+    stop("In data, value.level column is must! And there should be only one value.* column!", call. = FALSE)
+  }
+
   # Checks
   pbs <- td %>% group_by(meta.price_basis) %>%
     summarise(n_times = n_distinct(time), max_time = max(time))
@@ -108,7 +112,7 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
 
 
   if((length(unique(common_td$time))>length(unique(common_td$time_part)))
-     && (length(setdiff(all_annual_parts, common_td$time_part)) == 0) ) {
+     && (length(setdiff(common_td$time_part, all_annual_parts)) == 0) ) {
     gvs <- c("time_part","meta.release_tag", "meta.name", "meta.disaggregation_group")
   } else {
     gvs <- c("meta.release_tag", "meta.name", "meta.disaggregation_group")
@@ -126,7 +130,7 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
 
   # more less this number is that good the series is : mean(cx$qd_linking_factor)
 
-  # many release vintage will not gt any value so extending cx
+  # many release vintage will not get any value so extending cx
   cx_ext <- cx %>%
     group_by(
       across(dplyr::all_of(setdiff(gvs, "meta.release_tag")))
@@ -166,7 +170,7 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     mutate(df = abs((value.level/value.level_spliced-1)))
 
   # Check this mean(series_bench$df)*100
-  if(return_diagnostics) return(series_bench)
+  if(return_diagnostics) return(list(bench = series_bench, linking_factor_df = cx, linking_factor_df_ext = cx_ext))
 
   series_converted <- series_converted %>%
     anti_join(
@@ -181,6 +185,18 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     ) %>%
     select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group, value.level, meta.is_spliced) %>%
     distinct()
+
+  # restore release order / date
+  rel_tag_flt_cols <- c("meta.release_order","meta.release_date")
+  rel_tag_flt_cols <- colnames(td) |> intersect(rel_tag_flt_cols)
+  rmap <- td |>
+    dplyr::select(meta.release_tag, all_of(rel_tag_flt_cols)) |>
+    dplyr::group_by(meta.release_tag) |>
+    dplyr::summarise_all(max) |>
+    dplyr::ungroup()
+
+  series_converted_ext <- series_converted_ext |>
+    dplyr::left_join(rmap, by = "meta.release_tag")
 
   tdl_out <- tdl
 

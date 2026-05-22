@@ -4,7 +4,7 @@
 fiscal_period_class <- c("fiscal_period")
 calendar_period_class <- c("calendar_period")
 
-tdf_class <- c("tdf", "tbl_df", "tbl", "data.frame")
+tdf_class <- c("tdf", "tibble_with_attrs", "tbl_df", "tbl", "data.frame")
 
 tdf_long_list_class <- c("tdf_long_list", "list")
 

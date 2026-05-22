@@ -2,7 +2,7 @@ test_that("NAS long series works", {
 
   nas_full <- readRDS(test_path("testdata", "gdp_gva_long.rds"))
 
-  nas_full_tdl <- nas_full |> purrr::map_depth(2, es_convert)
+  nas_full_tdl <- nas_full |> purrr::map_depth(2, es_convert_composite)
 
   implied_fig <- function(nd){
 
@@ -126,7 +126,7 @@ test_that("NAS long series works on public functions", {
 
   nas_full <- readRDS(test_path("testdata", "gdp_gva_long.rds"))
 
-  n0 <- nas_full |> purrr::map_depth(2, convert_es_data)
+  n0 <- nas_full |> purrr::map_depth(2, es_convert)
 
   implied_vals <- function(nd){
 

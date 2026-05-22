@@ -689,7 +689,7 @@ es_prepare_gdp_data <- function(dat, hmap, freq = c("quarterly", "annual")) {
 
 
 # should be es_convert_to_tdf_long_list
-es_convert <- function(dat){
+es_convert_composite <- function(dat){
   hmgva <- es_load_predefined_data("hmap_gva")
   hmgdp <- es_load_predefined_data("hmap_gdp")
 
@@ -744,7 +744,7 @@ es_convert <- function(dat){
 #'
 #' @return An object of class \code{tdf_long}.
 #' @export
-convert_es_data <- function(dat){
-  as_tdf_long(es_convert(dat))
+es_convert <- function(dat){
+  as_tdf_long(es_convert_composite(dat))
 }
 

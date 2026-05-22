@@ -22,6 +22,52 @@ as_tdf_long.tbl <- function(.data, .hmap = NULL, ...){
 as_tdf_long.data.frame <- as_tdf_long.tbl
 
 #' @export
+as_tdf_long.tdf <- function(.data, .hmap = NULL, value_col_name = "level", ...){
+
+  if(length(value_col_name)!=1) stop("Invalid <value_col_name>", call. = FALSE)
+
+  value_col_name <- value_col_name |>
+    tolower() |>
+    stringr::str_remove_all("value\\.")
+
+  value_col_name_this <- paste0("value.", value_col_name)
+
+  d1 <- .data |>
+    tidyr::pivot_longer(cols = where(is.numeric), names_to = "meta.name", values_to = value_col_name_this)
+
+  chk <- c(
+    setdiff(colnames(d1), c("time", "meta.name", value_col_name_this)),
+    setdiff(c("time", "meta.name", value_col_name_this), colnames(d1))
+  )
+
+  if(length(chk)!=0) stop("Unknown format of data!", call. = FALSE)
+
+  d1 <- d1 |>
+    dplyr::mutate(
+      meta.release_tag = "#main",
+      meta.release_order = 0,
+      meta.price_basis = "AsIs")
+
+  if(is.data.frame(.hmap) && !is.null(.hmap)){
+    d2 <- d1 |> dplyr::distinct(meta.name)
+    d2$meta.disaggregation_group <-  d2$meta.name |>
+      purrr::map_chr(~hmap_which_disaggregation_group(.x, hmap = .hmap))
+
+    if(any(is.na(d2$meta.disaggregation_group))){
+      stop("At least a name not mapped to a disaggregation group!", call. = FALSE)
+    }
+
+    d1 <- d1 |> dplyr::left_join(d2, by = "meta.name")
+
+  } else {
+    d1$meta.disaggregation_group <- "indicator"
+  }
+
+  as_tdf_long.tbl(.data = d1, .hmap = .hmap, ...)
+
+}
+
+#' @export
 as_tdf_long.tdf_long_list <- function(.data, ...){
   # Here .hmap will be completely ignored even if passed as .data is
   # tdf_long_list object This is porper but since tdf_long_list is already
