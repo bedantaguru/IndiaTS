@@ -35,6 +35,7 @@
 #' @return An aggregated \code{tdf_long} object.
 #'
 #' @export
+#' @importFrom stats aggregate
 aggregate.tdf_long <- function(
     x,
     type = c("component","temporal"),

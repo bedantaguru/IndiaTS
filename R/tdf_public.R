@@ -133,15 +133,17 @@ as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_
   dgs <- disaggregation_group
 
   if(is.null(names)){
-    if(is.null(disaggregation_group)){
+    if(is.null(dgs)){
       names <- df$meta.name |> unique()
       dgs <- df$meta.disaggregation_group |> unique()
     } else {
       names <- df |>
-        dplyr::filter(meta.disaggregation_group %in% disaggregation_group) |>
+        dplyr::filter(meta.disaggregation_group %in% dgs) |>
         pull(meta.name) |>
         unique()
     }
+  } else if(is.null(dgs)){
+    dgs <- df |> dplyr::filter(meta.name %in% names) |> dplyr::pull(meta.disaggregation_group)
   }
 
   if(length(names)==0) {

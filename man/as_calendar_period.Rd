@@ -46,7 +46,6 @@ calendar conventions. When multiple interpretations are possible, the
 finest granularity is preferred.
 }
 \examples{
-as_calendar_period(as.Date("2023-06-15"))
 
 as_calendar_period("Q2 2023")
 

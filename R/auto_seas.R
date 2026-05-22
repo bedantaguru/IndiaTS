@@ -155,7 +155,8 @@ num_sundays_in_month <- function(d) {
 generate_SA_dummies <- function(from, to){
 
   dat_dummy <- tibble::tibble(
-    date = seq(from, to, by = "month")
+    date = seq(to_month_date(from), to_month_date(to), by = "month") |>
+      to_month_date()
   )
 
   change_day <- function(x, to_this){
@@ -188,7 +189,7 @@ generate_SA_dummies <- function(from, to){
     dplyr::mutate(is_diwali = TRUE)
 
   diwali_days_fl <- diwali_days %>%
-    dplyr::mutate(date = lubridate::floor_date(date, unit = "month") %>% as.Date())
+    dplyr::mutate(date = to_month_date(date))
 
 
   dat_dummy <- dat_dummy %>%
@@ -217,82 +218,231 @@ generate_SA_dummies <- function(from, to){
 }
 
 
-auto_seas_monthly_series <- function(tdf, alpha = 0.05) {
+#' Internal helper: run X-13ARIMA-SEATS with consistent settings
+#'
+#' Wraps \code{seasonal::seas()} with a fixed set of options used across
+#' the package's automatic seasonal adjustment routines. The decomposition
+#' engine (X-11 or SEATS) is selected via \code{seats}.
+#'
+#' @param ts_in A univariate \code{ts} object to be seasonally adjusted.
+#' @param xreg Optional regression matrix passed to \code{seasonal::seas()}.
+#' @param usertype Optional character vector specifying the type of each
+#'   user-defined regressor (e.g. \code{"td"}, \code{"holiday"}).
+#' @param seats Logical. If \code{TRUE}, use the SEATS decomposition engine;
+#'   if \code{FALSE} (default), use X-11.
+#'
+#' @return A \code{seas} object as returned by \code{seasonal::seas()}.
+#'
+#' @keywords internal
+#' @noRd
+run_seas <- function(ts_in, xreg = NULL, usertype = NULL, seats = FALSE) {
 
-  # Prepare data
-  one_yr_ahead <- max(tdf$time) %>% as.Date(anchor = "last")
-  lubridate::year(one_yr_ahead) <- lubridate::year(one_yr_ahead) + 1
-  sa_dummy <- generate_SA_dummies(
-    from = min(tdf$time) %>% as.Date(),
-    to = one_yr_ahead)
-  sa_dummy_ts <- sa_dummy %>% to_ts()
+  # Build argument list dynamically so X-11 / SEATS args are mutually exclusive
+  args <- list(
+    x                   = ts_in,
+    transform.function  = "none",
+    transform.power     = 0,
+    xreg                = xreg,
+    regression.usertype = usertype,
+    regression.aictest  = NULL,
+    automdl.savelog     = "amd",
+    check.print         = "all",
+    outlier.types       = "all"
+  )
 
-  # Common seas code section
-  seas_spec <- function(ts_in, xreg = NULL, usertype = NULL) {
-    seasonal::seas(
-      ts_in,
-      transform.function = "none",
-      transform.power    = 0,
-      xreg               = xreg,
-      regression.usertype = usertype,
-      regression.aictest = NULL,
-      x11                = "",
-      automdl.savelog    = "amd",
-      check.print        = "all",
-      outlier.types      = "all",
-      x11.sigmalim       = c(1.5, 2.5)
-    )
+  if (seats) {
+    # SEATS is the default engine; no x11 spec → SEATS runs
+    # (no x11.sigmalim, since that's an X-11-only argument)
+  } else {
+    args$x11          <- ""
+    args$x11.sigmalim <- c(1.5, 2.5)
   }
 
+  do.call(seasonal::seas, args)
+}
+
+auto_seas_monthly_series <- function(tdf, alpha = 0.05, attach_diagnostic = FALSE, SEATS = FALSE) {
+
+  # Prepare data
+  ahead_num <- if(SEATS) 3 else 1
+  years_ahead <- max(tdf$time) %>% as.Date(anchor = "last")
+  lubridate::year(years_ahead) <- lubridate::year(years_ahead) + ahead_num
+
+  sa_dummy <- generate_SA_dummies(
+    from = min(tdf$time) %>% as.Date(),
+    to = years_ahead)
+
+  sa_dummy_ts <- sa_dummy %>% to_ts()
 
   for_single_var <- function(var_name){
-
     this_ts <- tdf[c("time", var_name)] %>% to_ts
-
     sa_dummy_this <- sa_dummy_ts[,c("TD", "D")]
     # Alternative form usertype_this <- c("td","holiday")
     usertype_this <- c("td","td")
-
-    s_fit <- seas_spec(
+    s_fit <- run_seas(
       this_ts,
       xreg = sa_dummy_this,
-      usertype = usertype_this)
-
+      usertype = usertype_this,
+      seats = SEATS)
+    dummy_state <- c("both")
     coeffs <- summary(s_fit)$coefficients
     coeffs <- tibble::as_tibble(coeffs) %>%
       dplyr::bind_cols(tibble::tibble(var = rownames(coeffs)),.)
     colnames(coeffs)[5] <- "p_value"
-
-    coeffs_r1 <- coeffs %>% filter(var == "xreg1")
-    coeffs_r2 <- coeffs %>% filter(var == "xreg2")
+    coeffs_r1 <- coeffs %>% dplyr::filter(var == "xreg1")
+    coeffs_r2 <- coeffs %>% dplyr::filter(var == "xreg2")
     # Refit if required
     if (coeffs_r1$p_value > alpha && coeffs_r2$p_value > alpha){
-      s_fit <- seas_spec(this_ts)
+      s_fit <- run_seas(this_ts, seats = SEATS)
+      dummy_state <- c("none")
     } else if (coeffs_r1$p_value > alpha && coeffs_r2$p_value < alpha) {
-      s_fit <- seas_spec(
+      s_fit <- run_seas(
         this_ts,
         xreg = sa_dummy_this[,2],
-        usertype = usertype_this[2])
+        usertype = usertype_this[2],
+        seats = SEATS)
+      dummy_state <- c("trading_day")
     } else if (coeffs_r1$p_value < alpha && coeffs_r2$p_value > alpha) {
-      s_fit <- seas_spec(
+      s_fit <- run_seas(
         this_ts,
         xreg = sa_dummy_this[,1],
-        usertype = usertype_this[1])
+        usertype = usertype_this[1],
+        seats = SEATS)
+      dummy_state <- c("diwali")
     }
-
-    # Output: seasonally adjusted series (X-11 D11)
-    dout <- s_fit$series$d11 %>% as_tdf()
+    # Output: seasonally adjusted series (SEATS s11 or X-11 d11)
+    sa_series <- if (SEATS) s_fit$series$s11 else s_fit$series$d11
+    dout <- sa_series %>% as_tdf()
     colnames(dout)[2] <- var_name
-    dout
-
+    list(
+      data = dout,
+      info = if (attach_diagnostic) {
+        list(fit = s_fit, reg = dummy_state, engine = if (SEATS) "SEATS" else "X-11")
+      } else NULL
+    )
   }
 
-  out_tdf <- colnames(tdf)[-1] %>% map(for_single_var) %>%
+  # Gather Results
+  results <- colnames(tdf)[-1] %>% purrr::map(for_single_var)
+
+  out_tdf <- results %>%
+    purrr::map("data") %>%
     purrr::reduce(function(x, y){
-      left_join(x,y , by = "time")
+      dplyr::left_join(x, y, by = "time")
     })
 
-  out_tdf
+  if (attach_diagnostic) {
+    attr(out_tdf, "diagnostics") <- results %>%
+      purrr::map("info") %>%
+      rlang::set_names(colnames(tdf)[-1])
+  }
 
+  out_tdf
 }
+
+auto_seas_quarterly_series <- function(tdf, attach_diagnostic = FALSE, SEATS = FALSE) {
+
+  for_single_var <- function(var_name){
+    this_ts <- tdf[c("time", var_name)] %>% to_ts
+    s_fit <- run_seas(this_ts, seats = SEATS)
+    dummy_state <- c("none")
+    # Output: seasonally adjusted series (SEATS s11 or X-11 d11)
+    sa_series <- if (SEATS) s_fit$series$s11 else s_fit$series$d11
+    dout <- sa_series %>% as_tdf()
+    colnames(dout)[2] <- var_name
+    list(
+      data = dout,
+      info = if (attach_diagnostic) {
+        list(fit = s_fit, reg = dummy_state, engine = if (SEATS) "SEATS" else "X-11")
+      } else NULL
+    )
+  }
+
+  # Gather Results
+  results <- colnames(tdf)[-1] %>% purrr::map(for_single_var)
+
+  out_tdf <- results %>%
+    purrr::map("data") %>%
+    purrr::reduce(function(x, y){
+      dplyr::left_join(x, y, by = "time")
+    })
+
+  if (attach_diagnostic) {
+    attr(out_tdf, "diagnostics") <- results %>%
+      purrr::map("info") %>%
+      rlang::set_names(colnames(tdf)[-1])
+  }
+
+  out_tdf
+}
+
+
+#' Automatic seasonal adjustment of a time-indexed data frame
+#'
+#' Dispatches to the appropriate seasonal adjustment routine based on the
+#' frequency of the input \code{tdf}. Quarterly series are passed to
+#' \code{auto_seas_quarterly_series()} (no user regressors); monthly series
+#' are passed to \code{auto_seas_monthly_series()} (with trading-day and
+#' Diwali regressors, retained or dropped via a coefficient-significance
+#' refit step).
+#'
+#' The underlying decomposition is performed by X-13ARIMA-SEATS via
+#' \code{seasonal::seas()}. The decomposition engine (X-11 or SEATS) is
+#' selected via the \code{SEATS} argument and applies uniformly to all
+#' series in \code{tdf}.
+#'
+#' @param tdf A time-indexed data frame (\code{tdf}) with a \code{time}
+#'   column and one or more numeric value columns. Frequency must be either
+#'   monthly or quarterly; other frequencies are rejected.
+#' @param alpha Numeric scalar in (0, 1). Significance threshold used by
+#'   \code{auto_seas_monthly_series()} when deciding whether to retain
+#'   trading-day and Diwali regressors after the initial fit. Ignored for
+#'   quarterly inputs. Defaults to \code{0.05}.
+#' @param attach_diagnostic Logical. If \code{TRUE}, the returned object
+#'   carries a \code{"diagnostics"} attribute: a named list (keyed by
+#'   variable name) of per-series diagnostic lists, each containing the
+#'   full \code{seas} fit object (\code{fit}), the regressor state retained
+#'   (\code{reg}: one of \code{"both"}, \code{"trading_day"},
+#'   \code{"diwali"}, or \code{"none"}), and the engine used
+#'   (\code{engine}: \code{"X-11"} or \code{"SEATS"}). Defaults to
+#'   \code{FALSE}.
+#' @param SEATS Logical. If \code{TRUE}, use the SEATS decomposition engine
+#'   (extracting \code{s11} as the seasonally adjusted series). If
+#'   \code{FALSE} (default), use the X-11 engine (extracting \code{d11}).
+#'   See \emph{Engine choice} below.
+#'
+#' @return A wide \code{tdf} containing the seasonally adjusted series for
+#'   each non-time column of the input, joined on \code{time}. When
+#'   \code{attach_diagnostic = TRUE}, the result additionally carries a
+#'   \code{"diagnostics"} attribute as described above.
+#'
+#' @section Engine choice:
+#' X-11 is a filter-based decomposition; SEATS is a model-based
+#' decomposition derived from the fitted ARIMA model. Both engines share
+#' the same RegARIMA preprocessing stage, so user regressors (trading-day,
+#' Diwali) behave identically across engines. MoSPI publishes quarterly
+#' GDP/GVA seasonally adjusted series using SEATS; most central bank
+#' communications on monthly indicators use X-11. When in doubt, run both
+#' and compare residual seasonality diagnostics on the output series.
+#'
+#' @section Frequency dispatch:
+#' The frequency of \code{tdf} is determined via \code{frequency(tdf)} and
+#' must resolve to either \code{"month"} or \code{"quarter"}. Any other
+#' value (including \code{NA} or unrecognised strings) triggers an error.
+#'
+#' @export
+auto_seas <- function(tdf, alpha = 0.05, attach_diagnostic = FALSE, SEATS = FALSE) {
+  fq <- frequency(tdf)
+
+  if (fq == "quarter") {
+    auto_seas_quarterly_series(
+      tdf, attach_diagnostic = attach_diagnostic, SEATS = SEATS)
+  } else if (fq == "month") {
+    auto_seas_monthly_series(
+      tdf, alpha = alpha, attach_diagnostic = attach_diagnostic, SEATS = SEATS)
+  } else {
+    stop(paste0("This frequency <", fq,"> not supported!"), call. = FALSE)
+  }
+}
+
 
