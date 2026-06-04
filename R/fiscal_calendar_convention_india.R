@@ -1003,11 +1003,11 @@ as_fiscal_period_for_txt <- function(
 
     # Date route
     via_date_result <- as_fiscal_period_for_txt_via_date_chars(
-      xout[still_na],
+      x[still_na],
       with_year = with_year,
       to_frequency = to_frequency
     )
-    xout[still_na] <- ifelse(!is.na(via_date_result), via_txt_result, xout[still_na])
+    xout[still_na] <- ifelse(!is.na(via_date_result), via_date_result, xout[still_na])
 
     still_na <- is.na(xout)
   }
@@ -1016,11 +1016,11 @@ as_fiscal_period_for_txt <- function(
 
     # Calendar period route
     via_cp_result <- as_fiscal_period_for_txt_via_calendar_period_chars(
-      xout[still_na],
+      x[still_na],
       with_year = with_year,
       to_frequency = to_frequency
     )
-    xout[still_na] <- ifelse(!is.na(via_cp_result), via_txt_result, xout[still_na])
+    xout[still_na] <- ifelse(!is.na(via_cp_result), via_cp_result, xout[still_na])
   }
 
   class(xout) <- fiscal_period_class
