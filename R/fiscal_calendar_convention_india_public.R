@@ -405,6 +405,18 @@ fiscal_year <- function(x){
 #' @param x A character vector representing fiscal periods.
 #' @param with_year Logical. If \code{TRUE}, fiscal year detection is used
 #'   as a fallback when month and quarter detection fail.
+#' @param homogeneous_frequency Logical. If \code{TRUE} (default), prioritizes a
+#'   single consistent frequency across all parsed elements, disabling sequential
+#'   detection for text inputs.
+#' @param frequency Character. The desired target frequency for the conversion.
+#'   Must be one of \code{"month"}, \code{"quarter"}, \code{"halfyear"}, or
+#'   \code{"year"}. If \code{NULL} (default), the frequency is inferred
+#'   automatically based on the input data and detection rules.
+#' @param omni_channel_conversion Logical. If \code{TRUE} (default), enables
+#'   robust auto-conversion across mixed data types. This automatically coerces
+#'   calendar quarters to fiscal periods, handles mixed character date formats,
+#'   and resolves Excel's numeric date serialization issues (e.g., parsing
+#'   "45017" back to a valid date).
 #'
 #' @return
 #' A character vector of the same length as \code{x}, containing standardized
@@ -433,18 +445,30 @@ fiscal_year <- function(x){
 #' as_fiscal_period(x)
 #'
 #' @export
-as_fiscal_period <- function(x, with_year = TRUE, homogeneous_frequency = TRUE) {
+as_fiscal_period <- function(
+    x,
+    with_year = TRUE, homogeneous_frequency = TRUE,
+    frequency = NULL,
+    omni_channel_conversion = TRUE) {
+
+  if(!is.null(frequency)){
+    # Use target frequency (to be used mainly for as_fiscal_period_for_date case directly or via as_fiscal_period_for_txt)
+    frequency <- match.arg(frequency, c("month","quarter","halfyear","year"))
+  }
 
   if(is_date_type(x)){
-    res <- as_fiscal_period_for_date(as.Date(x), with_year = with_year)
+    res <- as_fiscal_period_for_date(as.Date(x), with_year = with_year, to_frequency = frequency)
   } else {
     if(inherits(x, calendar_period_class[1])){
       res <- as_fiscal_period_for_calendar_period(x, with_year = with_year)
     } else {
       if(is.character(x)){
-        res <- as_fiscal_period_for_txt(x, with_year = with_year,
-                                        homogeneous_frequency_priority = homogeneous_frequency,
-                                        disable_sequential_detection = homogeneous_frequency)
+        res <- as_fiscal_period_for_txt(
+          x, with_year = with_year,
+          homogeneous_frequency_priority = homogeneous_frequency,
+          disable_sequential_detection = homogeneous_frequency,
+          to_frequency = frequency,
+          omni_channel_conversion = omni_channel_conversion)
       } else {
         stop("Input must be a date, calendar_period, or character vector.", call. = FALSE)
       }

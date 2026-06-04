@@ -4,13 +4,34 @@
 \alias{as_fiscal_period}
 \title{Parse character input as fiscal periods}
 \usage{
-as_fiscal_period(x, with_year = TRUE, homogeneous_frequency = TRUE)
+as_fiscal_period(
+  x,
+  with_year = TRUE,
+  homogeneous_frequency = TRUE,
+  frequency = NULL,
+  omni_channel_conversion = TRUE
+)
 }
 \arguments{
 \item{x}{A character vector representing fiscal periods.}
 
 \item{with_year}{Logical. If \code{TRUE}, fiscal year detection is used
 as a fallback when month and quarter detection fail.}
+
+\item{homogeneous_frequency}{Logical. If \code{TRUE} (default), prioritizes a
+single consistent frequency across all parsed elements, disabling sequential
+detection for text inputs.}
+
+\item{frequency}{Character. The desired target frequency for the conversion.
+Must be one of \code{"month"}, \code{"quarter"}, \code{"halfyear"}, or
+\code{"year"}. If \code{NULL} (default), the frequency is inferred
+automatically based on the input data and detection rules.}
+
+\item{omni_channel_conversion}{Logical. If \code{TRUE} (default), enables
+robust auto-conversion across mixed data types. This automatically coerces
+calendar quarters to fiscal periods, handles mixed character date formats,
+and resolves Excel's numeric date serialization issues (e.g., parsing
+"45017" back to a valid date).}
 }
 \value{
 A character vector of the same length as \code{x}, containing standardized
