@@ -1435,7 +1435,13 @@ Ops.fiscal_period <- function(e1, e2) {
 
   op <- .Generic
 
-  # For all non-arithmetic operators behave like character
+  # 1. Handle Relational (Comparison) Operators using as.Date
+  relational_ops <- c("==", "!=", "<", "<=", ">", ">=")
+  if (op %in% relational_ops) {
+    return(do.call(op, list(as.Date(e1), as.Date(e2))))
+  }
+
+  # 2. For all other non-arithmetic operators behave like character
   if (!(op %in% c("+", "-"))) {
     return(do.call(op, list(as.character(e1), as.character(e2))))
   }
@@ -1544,12 +1550,17 @@ Ops.fiscal_period <- function(e1, e2) {
 
 
 #' @export
-#' @export
 Ops.calendar_period <- function(e1, e2) {
 
   op <- .Generic
 
-  # For all non-arithmetic operators behave like character
+  # 1. Handle Relational (Comparison) Operators using as.Date
+  relational_ops <- c("==", "!=", "<", "<=", ">", ">=")
+  if (op %in% relational_ops) {
+    return(do.call(op, list(as.Date(e1), as.Date(e2))))
+  }
+
+  # 2. For all other non-arithmetic operators behave like character
   if (!(op %in% c("+", "-"))) {
     return(do.call(op, list(as.character(e1), as.character(e2))))
   }
