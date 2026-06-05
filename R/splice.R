@@ -51,8 +51,12 @@ splice_series.tdf_long <- function(tdl, target_price_basis = NULL, return_diagno
 
 
 #  It takes two price basis tdf-long form
+
 #' @export
-splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_diagnostics = FALSE, ...){
+splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
+
+  # Match the mean_type argument, defaulting to the first option ("auto")
+  mean_type <- match.arg(mean_type)
 
   tdf_long_check_structure(tdl)
 
@@ -78,6 +82,29 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     px <- pbs %>% dplyr::arrange(dplyr::desc(max_time), n_times) %>%
       pull(meta.price_basis)
     target_price_basis <- px[1]
+  }
+
+  if(!(target_price_basis %in% pbs$meta.price_basis)){
+    # Try to auto match (based on string matching)
+    if(length(target_price_basis)!=1) stop("Not scalar entry for target_price_basis!", call. = FALSE)
+    pbs_to_match <- unique(pbs$meta.price_basis)
+    if_there_PTXQC <- any(file.exists(file.path(.libPaths(), "PTXQC")))
+
+    # x vector and y scalar
+    match_measure <- function(x, y){
+      if(if_there_PTXQC){
+        x |> purrr::map_int(~PTXQC::LCS(.x, y) |> nchar())
+      } else {
+        stringr::str_detect(x, y) |> as.numeric()
+      }
+    }
+
+    try_match <- dplyr::tibble(
+      pb = pbs_to_match,
+      m = match_measure(pb, target_price_basis)
+    )
+
+    target_price_basis <- try_match$pb[which.max(try_match$m)][1]
   }
 
   series_in_tar <- td %>% filter(meta.price_basis == target_price_basis) %>%
@@ -118,6 +145,20 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     gvs <- c("meta.release_tag", "meta.name", "meta.disaggregation_group")
   }
 
+  # Helper function to dynamically calculate mean based on the vector's values
+  aggregate_fn <- function(x) {
+    mt <- mean_type
+    if (mt == "auto") {
+      mt <- if (all(x > 0)) "GM" else "AM"
+    }
+
+    if (mt == "GM") {
+      exp(mean(log(x)))
+    } else {
+      mean(x)
+    }
+  }
+
   ## avg_linking_factor
   cx <- common_td %>%
     mutate(linking_factor = value.level_in_tar/value.level_to_conv) %>%
@@ -125,7 +166,7 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
       across(dplyr::all_of(gvs))
     ) %>%
     summarise(
-      avg_linking_factor = mean(linking_factor),
+      avg_linking_factor = aggregate_fn(linking_factor),
       qd_linking_factor = quartile_deviation(linking_factor), .groups = "drop")
 
   # more less this number is that good the series is : mean(cx$qd_linking_factor)
@@ -135,7 +176,7 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     group_by(
       across(dplyr::all_of(setdiff(gvs, "meta.release_tag")))
     ) %>%
-    summarise(avg_linking_factor = mean(avg_linking_factor), .groups = "drop") %>%
+    summarise(avg_linking_factor = aggregate_fn(avg_linking_factor), .groups = "drop") %>%
     dplyr::cross_join(
       series_to_conv %>% distinct(meta.release_tag) %>%
         filter(!(meta.release_tag %in% cx$meta.release_tag))) %>%
@@ -144,8 +185,6 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
         select(dplyr::all_of(gvs), avg_linking_factor) %>%
         distinct()
     )
-
-
 
   series_converted <- series_to_conv %>%
     mutate(time_part = fi$converter(time, with_year = FALSE)) %>%
@@ -157,7 +196,6 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
     mutate(meta.price_basis = target_price_basis, meta.is_spliced = TRUE) %>%
     select(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group,
            value.level = value.level_conv, meta.is_spliced)
-
 
   this_jvs <- c("time", "meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group")
 
@@ -207,4 +245,3 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, return_d
   tdl_out
 
 }
-
