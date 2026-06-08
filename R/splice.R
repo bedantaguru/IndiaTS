@@ -53,7 +53,10 @@ splice_series.tdf_long <- function(tdl, target_price_basis = NULL, return_diagno
 #  It takes two price basis tdf-long form
 
 #' @export
-splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
+splice_series.tdf_long_list <- function(
+    tdl,
+    target_price_basis = NULL,
+    mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
 
   # Match the mean_type argument, defaulting to the first option ("auto")
   mean_type <- match.arg(mean_type)
@@ -147,6 +150,9 @@ splice_series.tdf_long_list <- function(tdl, target_price_basis = NULL, mean_typ
 
   # Helper function to dynamically calculate mean based on the vector's values
   aggregate_fn <- function(x) {
+    x <- x[!is.na(x)]
+    if(length(x)==0) return(NA)
+
     mt <- mean_type
     if (mt == "auto") {
       mt <- if (all(x > 0)) "GM" else "AM"
