@@ -322,8 +322,33 @@ auto_seas_monthly_series <- function(tdf, alpha = 0.05, attach_diagnostic = FALS
     )
   }
 
+  for_single_var_safe <- function(var_name){
+    tryCatch(
+      for_single_var(var_name = var_name),
+      error = function(e) {
+        this_ts <- tdf[c("time", var_name)]
+        this_ts[[2]] <- NA
+        e_msg <- substr(e$message, 1, 20) |>
+          stringr::str_replace_all("\n+|\r+"," ") |>
+          paste0(collapse = "; ") |> paste0("...")
+        message(
+          paste0(
+            "Seasonal adjustment failed for variable <",var_name,
+            ">. The corresponding values in the adjusted table have been filled with NA.\n",
+            "Error message snippet: ", e_msg)
+        )
+        return(
+          list(
+            data = this_ts,
+            info = NULL
+          )
+        )
+      }
+    )
+  }
+
   # Gather Results
-  results <- colnames(tdf)[-1] %>% purrr::map(for_single_var)
+  results <- colnames(tdf)[-1] %>% purrr::map(for_single_var_safe)
 
   out_tdf <- results %>%
     purrr::map("data") %>%

@@ -5,13 +5,18 @@ as_tdf_long <- function(.data, .hmap = NULL, ...){
 }
 
 #' @export
-as_tdf_long.tbl <- function(.data, .hmap = NULL, ...){
+as_tdf_long.tbl <- function(.data, .hmap = NULL, convert_values = TRUE, ...){
 
   if(is.null(.hmap)){
     .hmap <- tibble::tibble()
   }
 
   d1 <- tdf_long_check_structure(dat = .data, hmap = .hmap)
+
+  if(convert_values){
+    d1 <- d1 |>
+      dplyr::mutate(dplyr::across(tidyselect::starts_with("value."), as.numeric))
+  }
 
   d2 <- tibble_with_attrs(d1, hmap = .hmap)
   class(d2) <- tdf_long_class

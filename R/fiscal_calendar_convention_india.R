@@ -1,10 +1,15 @@
 
 .current_fixed_date <- as.Date("2026-01-01")
 
-extract_month_only <- function(x, warn = TRUE) {
+extract_month_only <- function(x, warn = TRUE, strip_alpha_num = TRUE) {
 
   n <- length(x)
   out <- rep(NA_integer_, n)
+
+  # Replace all non-alphanumeric characters with a space
+  if(strip_alpha_num){
+    x <- stringr::str_replace_all(x, "[^[:alnum:]:-]", " ")
+  }
 
   # -------------------------------
   # 1. Month name patterns
@@ -70,9 +75,14 @@ extract_month_only <- function(x, warn = TRUE) {
   out
 }
 
-extract_month <- function(x, warn = TRUE, fy_over_two_century = TRUE) {
+extract_month <- function(x, warn = TRUE, fy_over_two_century = TRUE, strip_alpha_num = TRUE) {
 
   n <- length(x)
+
+  # Replace all non-alphanumeric characters with a space
+  if(strip_alpha_num){
+    x <- stringr::str_replace_all(x, "[^[:alnum:]:-]", " ")
+  }
 
   # --------------------------------------------------
   # Step 1: extract components
@@ -284,12 +294,12 @@ extract_fy <- function(x, fy_over_two_century = TRUE) {
   out <- rep(NA_character_, n)
 
   # --------------------------------------------------
-  # 1. Explicit range: YYYY-YY or YYYY–YY
+  # 1. Explicit range: YYYY-YY, YYYY–YY, or YYYY_YY
   #    Valid only if YY == (YYYY + 1) %% 100
   # --------------------------------------------------
   m_range <- stringr::str_match(
     x,
-    stringr::regex("(\\d{4})\\s*(?:-|–)\\s*(\\d{2})", ignore_case = TRUE)
+    stringr::regex("(\\d{4})\\s*(?:-|–|_)\\s*(\\d{2})", ignore_case = TRUE)
   )
   has_range <- !is.na(m_range[, 1])
   if (any(has_range)) {

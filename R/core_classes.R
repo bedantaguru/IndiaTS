@@ -79,8 +79,8 @@ print.tdf_long <- function(x, ...) {
 
     if (n_pb > 0) {
       pb_lower <- tolower(unique_pb)
-      has_real <- any(stringr::str_detect(pb_lower, "real"))
-      has_nom  <- any(stringr::str_detect(pb_lower, "nominal"))
+      has_real <- any(stringr::str_detect(pb_lower, "real"), na.rm = TRUE)
+      has_nom  <- any(stringr::str_detect(pb_lower, "nominal"), na.rm = TRUE)
 
       rn_flags <- c()
       if (has_real) rn_flags <- c(rn_flags, "Real")

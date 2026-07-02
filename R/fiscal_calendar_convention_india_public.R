@@ -1262,6 +1262,8 @@ sort.fiscal_period <- function(x, decreasing = FALSE, ...) {
 #' @export
 unique.fiscal_period <- function(x, ...) {
 
+  if(length(x)<=1) return(x)
+
   if(frequency.fiscal_period(x, singular = TRUE) == "mixed") {
     stop("Cannot get unique values from fiscal_period vector with mixed frequencies.", call. = FALSE)
   }
@@ -1438,7 +1440,78 @@ Ops.fiscal_period <- function(e1, e2) {
   # 1. Handle Relational (Comparison) Operators using as.Date
   relational_ops <- c("==", "!=", "<", "<=", ">", ">=")
   if (op %in% relational_ops) {
-    return(do.call(op, list(as.Date(e1), as.Date(e2))))
+    if(op == "==" || op == "!="){
+
+      comp_e2 <- as.character(e2)
+
+      if(is.character(e2) || is_period_type(e2)){
+        comp_e2 <- as.character(
+          as_fiscal_period(e2)
+        )
+      } else if(is_date_type(e2)){
+
+        fq1 <- frequency.fiscal_period(e1)
+
+        if(length(unique(fq1))==1){
+          which_one <- unique(fq1)[1]
+          comp_e2 <- as_fiscal_period_for_date(e2, to_frequency = which_one)
+        } else {
+          stop("Unable to convert time object since left side is of mixed frequency!", call. = FALSE)
+        }
+
+      }
+
+      return(
+        do.call(
+          op,
+          list(
+            as.character(e1),
+            comp_e2
+          )
+        )
+      )
+    }
+
+    # in other cases "<", "<=", ">", ">=" (convert to date for comparison)
+
+    if(is_period_type(e2)){
+      return(do.call(op, list(as.Date(e1), as.Date(e2))))
+    }
+
+    if(is_date_type(e2)){
+      return(do.call(op, list(as.Date(e1), as.Date(e2))))
+    }
+
+    if(is.character(e2)){
+
+      dt_try <- tryCatch(
+        as.Date(e2),
+        error = \(e) NULL
+      )
+
+      if(is.null(dt_try)){
+
+        fq1 <- frequency.fiscal_period(e1)
+
+        if(length(unique(fq1))==1){
+          which_one <- unique(fq1)[1]
+          comp_e2 <- as.Date(
+            as_fiscal_period_for_txt(e2, to_frequency = which_one)
+          )
+        } else {
+          comp_e2 <- as.Date(as_fiscal_period(e2))
+        }
+
+        return(do.call(op, list(as.Date(e1), comp_e2)))
+
+      } else {
+        return(do.call(op, list(as.Date(e1), dt_try)))
+      }
+
+    }
+
+    stop("Unsupported comparison!", call. = FALSE)
+
   }
 
   # 2. For all other non-arithmetic operators behave like character
@@ -1557,7 +1630,29 @@ Ops.calendar_period <- function(e1, e2) {
   # 1. Handle Relational (Comparison) Operators using as.Date
   relational_ops <- c("==", "!=", "<", "<=", ">", ">=")
   if (op %in% relational_ops) {
-    return(do.call(op, list(as.Date(e1), as.Date(e2))))
+    if(is_period_type(e2) || is_date_type(e2)){
+      return(do.call(op, list(as.Date(e1), as.Date(e2))))
+    }
+
+    if(is.character(e2)){
+
+      dt_try <- tryCatch(
+        as.Date(e2),
+        error = \(e) NULL
+      )
+
+      if(is.null(dt_try)){
+        return(do.call(op, list(
+          as.Date(e1),
+          as.Date(as_calendar_period(e2)))))
+      } else {
+        return(do.call(op, list(as.Date(e1), dt_try)))
+      }
+
+    }
+
+    stop("Unsupported comparison!", call. = FALSE)
+
   }
 
   # 2. For all other non-arithmetic operators behave like character
