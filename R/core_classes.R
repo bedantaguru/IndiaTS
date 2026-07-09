@@ -51,8 +51,15 @@ frequency.tdf_long_list <- function(tdl){
 
 #' @export
 print.tdf_long <- function(x, ...) {
-  cat("A Time-Data-Frame (tdf) - object in Long form, with:\n")
+  cat("A Time-Data-Frame (tdf) - object in Long form, with:\n\n")
 
+  # Grouped info
+  if(dplyr::is_grouped_df(x)){
+    gvars <- dplyr::group_vars(x)
+    cat(paste0(" * Grouped with gropued vars: ", paste0(gvars, collapse = ", "), "\n\n"))
+  }
+
+  cat("Meta-Info:-\n")
   # 1. Disaggregation layers
   hmap_cols <- NCOL(attr(x, "hmap"))
   layer_text <- if (!is.null(hmap_cols) && hmap_cols > 1) hmap_cols else "no"

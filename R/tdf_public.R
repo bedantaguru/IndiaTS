@@ -127,6 +127,10 @@ as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_
     stop("Value column not found!", call. = FALSE)
   }
 
+  if(length(unique(df$meta.price_basis))!=1){
+    warning("Multiple price basis found! Conversion maybe unexpected!", call. = FALSE)
+  }
+
   df <- df |>
     dplyr::rename(val_col := dplyr::all_of(value_col))
 
@@ -147,7 +151,7 @@ as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_
   }
 
   if(length(names)==0) {
-    stop("Either no name fetched based on input combination!", call. = FALSE)
+    stop("Possibly no name fetched based on input combination!", call. = FALSE)
   }
 
   df <- df |>
@@ -210,7 +214,7 @@ as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_
         df <- df |> group_by(time, meta.name) |> summarise(val_col = mean(val_col, na.rm= TRUE), .groups = "drop")
       }
     } else {
-      stop("Unexpected variation found in the data unable to proceed further!", call. = FALSE)
+      stop("Unexpected variation found in the data unable to proceed further (maybe filter on meta.price_basis or meta.release_tag) !", call. = FALSE)
     }
 
   }

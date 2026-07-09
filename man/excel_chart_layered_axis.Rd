@@ -11,7 +11,7 @@ excel_chart_layered_axis(
   subtitle = "(y-o-y, per cent)",
   sheet = "Data",
   year_col = "year",
-  period_col = "time",
+  period_col = "period",
   colors = NULL,
   ymin = NULL,
   ymax = NULL,
@@ -104,7 +104,7 @@ under-renders the dotted segments; Microsoft Excel renders them correctly.
 \dontrun{
 d <- data.frame(
   year = c(rep("2024-25", 4), rep("2025-26", 4), "2026-27"),
-  time = c("Q1","Q2","Q3","Q4","Q1","Q2","Q3","Q4","*Q1"),
+  period = c("Q1","Q2","Q3","Q4","Q1","Q2","Q3","Q4","*Q1"),
   GVA  = c(6.2,7.1,8.4,7.9,6.6,5.8,7.2,8.1,6.8),
   check.names = FALSE)
 excel_chart_layered_axis(d, "chart.xlsx", title = "Real GVA", subtitle = "(\%)")

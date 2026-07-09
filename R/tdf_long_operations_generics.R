@@ -54,3 +54,26 @@ aggregate.tdf_long <- function(
   as_tdf_long(lo)
 
 }
+
+
+
+
+#' @export
+#' @importFrom dplyr group_by
+group_by.tdf_long <- function(.data, ..., .add = FALSE, .drop = dplyr::group_by_drop_default(.data)) {
+  # 1. Check if ... is empty
+  if (...length() == 0) {
+
+    # 2. Pass predefined unquoted column names directly to NextMethod
+    NextMethod("group_by", .data,
+               .data$time, .data$meta.release_tag, .data$meta.price_basis,
+               .data$meta.name, .data$meta.disaggregation_group,
+               .add = .add, .drop = .drop)
+
+  } else {
+
+    # 3. If the user provided their own groups, proceed normally
+    NextMethod()
+
+  }
+}
