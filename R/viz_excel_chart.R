@@ -86,12 +86,13 @@
 #'   check.names = FALSE)
 #'
 #' # Standard Line Chart with markers and Boxed Labels on last 3 points
-#' excel_chart_layered_axis(d, "chart_line.xlsx", title = "Real GVA & GDP",
+#' viz_excel_chart_layered_axis(d, "chart_line.xlsx", title = "Real GVA & GDP",
 #'                          subtitle = "(%)", legend_type = "type2",
 #'                          legend_on_data_till = 3, add_points = TRUE)
 #' }
+#'
 #' @keywords internal
-excel_chart_layered_axis <- function(
+viz_excel_chart_layered_axis <- function(
     d, file,
     title             = "Time Series",
     subtitle          = "(y-o-y, per cent)",
