@@ -177,7 +177,7 @@ fiscal_month_for_date <- function(date, with_year = TRUE){
   if(with_year){
     format(date,"%b:%Y")
   }else{
-    format(date,"%b")
+    format(date,"%m")
   }
 
 }
@@ -1326,7 +1326,7 @@ as_calendar_period_for_fiscal_period <- function(x, with_year = TRUE) {
 
 freq_info_for_one_freq <- function(freq){
 
-  not_impl_fn <- function(x, with_year = TRUE) { stop("not implemented") }
+  # not_impl_fn <- function(x, with_year = TRUE) { stop("not implemented") }
 
   known_fq_dat <- tibble::tibble(
     known_fqs = c("month", "quarter", "halfyear", "year"),
@@ -1335,8 +1335,13 @@ freq_info_for_one_freq <- function(freq){
       fiscal_month,
       fiscal_quarter,
       fiscal_halfyear,
-      function(x, with_year = TRUE) fiscal_year(x))
-    # As calendar period is not required or focsus much its kept in case to be done later
+      function(x, with_year = TRUE) fiscal_year(x)),
+    converters_period = list(
+      function(x) as.numeric(fiscal_month(x, with_year = FALSE)),
+      function(x) as.numeric(stringr::str_remove_all(fiscal_quarter(x, with_year = FALSE), "[^0-9]")),
+      function(x) as.numeric(stringr::str_remove_all(fiscal_halfyear(x, with_year = FALSE), "[^0-9]")),
+      function(x) as.numeric(substr(fiscal_year(x), 1,4)))
+    # As calendar period is not required or focus much its kept in case to be done later
     # converters_fiscal = list(
     #   fiscal_month,
     #   fiscal_quarter,
@@ -1360,7 +1365,8 @@ freq_info_for_one_freq <- function(freq){
   list(
     rank = rnk,
     unit = known_fq_dat$units[rnk],
-    converter = known_fq_dat$converters[[rnk]]
+    converter = known_fq_dat$converters[[rnk]],
+    converters_period = known_fq_dat$converters_period[[rnk]]
   )
 
 }

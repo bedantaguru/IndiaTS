@@ -132,7 +132,7 @@ test_that("Monthly dates convert to correct fiscal month format", {
   result_4 <- as_fiscal_period(monthly_dates_4, with_year = FALSE)
   expect_equal(
     unclass(result_4),
-    c("Jun", "Jul", "Aug")
+    c("06", "07", "08")
   )
 })
 

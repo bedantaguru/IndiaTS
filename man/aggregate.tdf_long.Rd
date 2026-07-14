@@ -2,52 +2,52 @@
 % Please edit documentation in R/tdf_long_operations_generics.R
 \name{aggregate.tdf_long}
 \alias{aggregate.tdf_long}
-\title{Aggregate a tdf_long Object Temporally or by Component}
+\title{Aggregate a \code{tdf_long} Object}
 \usage{
 \method{aggregate}{tdf_long}(
   x,
   type = c("temporal", "component"),
   to_freq = NULL,
+  aggregate_function = sum,
+  on_incomplete_periods = FALSE,
   silent = FALSE,
   ...
 )
 }
 \arguments{
-\item{x}{A \code{tdf_long} object containing the time-series data.}
+\item{x}{A \code{tdf_long} object.}
 
-\item{type}{A character string specifying the type of aggregation.
-Must be either \code{"temporal"} (default) or \code{"component"}.}
+\item{type}{Type of aggregation. One of \code{"temporal"} (default) or \code{"component"}.}
 
-\item{to_freq}{The target frequency for temporal aggregation (e.g., \code{"annual"}).
-If left as \code{NULL} (the default) when \code{type = "temporal"}, the function
-automatically selects the next lower frequency (e.g., monthly becomes quarterly,
-quarterly becomes half-yearly). Ignored if \code{type = "component"}.}
+\item{to_freq}{Target frequency for temporal aggregation (e.g., \code{"quarter"},
+\code{"halfyear"} or \code{"year"}). If \code{NULL}, the next lower frequency is selected
+automatically. Ignored when \code{type = "component"}.}
 
-\item{silent}{Logical. If \code{TRUE}, suppresses informational messages during
-the aggregation process. Default is \code{FALSE}.}
+\item{aggregate_function}{Function used to aggregate observations during temporal
+aggregation. Defaults to \link[base:sum]{base::sum}.}
 
-\item{...}{Additional arguments passed to the underlying internal aggregation functions.}
+\item{silent}{Logical. If \code{TRUE}, suppresses informational messages.}
+
+\item{...}{Additional arguments passed to internal aggregation methods.}
 }
 \value{
-An aggregated \code{tdf_long} object.
+A \code{tdf_long} object containing the aggregated series.
 }
 \description{
-A unified method to aggregate time-series data within a \code{tdf_long} object.
-It supports both dimensional aggregation (rolling up components via the embedded
-hierarchical map) and temporal aggregation (converting to a lower frequency).
+Aggregates a \code{tdf_long} object either across time (temporal aggregation)
+or across components using the embedded hierarchical map.
 }
 \details{
-The function operates in one of two modes depending on the \code{type} argument:
+The function supports two modes of aggregation:
 
 \itemize{
-\item \strong{\code{type = "temporal"}}: Aggregates data over time to convert a
-high-frequency series to a lower frequency. For example, aggregating quarterly
-figures into half-yearly or annual figures. This mode requires the \code{to_freq}
-argument to be specified.
+\item \strong{\code{type = "temporal"}} aggregates a higher-frequency series to
+a lower frequency (e.g., monthly to quarterly or quarterly to yearly). The target
+frequency can be specified using \code{to_freq}; if omitted, the next lower
+frequency is chosen automatically.
 
-\item \strong{\code{type = "component"}}: Aggregates data dimensionally based on the
-embedded hierarchical map (\code{hmap}). This is a generic framework used to roll up
-granular classifications into higher-level aggregates. For example, aggregating
-sectoral data (Agriculture, Industry, Services) into headline Gross Value Added (GVA).
+\item \strong{\code{type = "component"}} aggregates series across the hierarchy
+defined in the embedded \code{hmap}. This is useful for rolling up detailed
+classifications into higher-level aggregates (e.g., industry groups into total GVA).
 }
 }

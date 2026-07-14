@@ -1,12 +1,25 @@
 
 
-aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE){
+aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE,
+                               aggregate_function = sum,
+                               aggregate_on_incomplete = FALSE){
 
   tdf_long_check_structure(tdl)
 
   known_fqs <- c("month", "quarter", "halfyear", "year")
 
   fq <- frequency.tdf_long_list(tdl)
+
+  if(!(fq %in% known_fqs)){
+    stop(
+      sprintf(
+        "Temporal aggregation is only supported for the following frequencies: %s. Received: '%s'.",
+        paste(known_fqs, collapse = ", "),
+        fq[1]
+      ),
+      call. = FALSE
+    )
+  }
 
   rnk <- which(known_fqs == fq)
 
@@ -75,7 +88,7 @@ aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE){
       time_old = time
     )
 
-  time_agg_fn <- sum
+  time_agg_fn <- aggregate_function
 
   # if it exsis "meta.temporal_accumulation_rule"
   if("meta.temporal_accumulation_rule" %in% colnames(dat)){
@@ -93,6 +106,49 @@ aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE){
 
   }
 
+  # Incomplete Period Summaries
+  d_na_chk <- dat_na_populated |>
+    dplyr::filter(
+      dplyr::if_any(
+        dplyr::starts_with("value"),
+        ~ is.na(.x)
+      )
+    )
+
+  # Special Operations on incomplete cases
+  if(NROW(d_na_chk)>0 && aggregate_on_incomplete) {
+    # By this time dat should have meta.low_freq_time already attached (from prior steps)
+    dat_no_na <- dat |>
+      dplyr::filter(
+        dplyr::if_all(
+          dplyr::starts_with("value"),
+          ~ !is.na(.x)
+        )
+      )
+
+    dat_no_na <- dat_no_na |>
+      dplyr::mutate(high_freq_pt = fi_this$high_freq_info$converters_period( .data$time)) |>
+      dplyr::group_by(.data$meta.name, .data$meta.disaggregation_group,
+                      .data$meta.price_basis, .data$meta.release_tag,
+                      .data$meta.low_freq_time) |>
+      dplyr::mutate(high_freq_pt_norm = .data$high_freq_pt - min(.data$high_freq_pt)) |>
+      dplyr::ungroup()
+
+    common_len <- dat_no_na$high_freq_pt_norm |>
+      split(dat_no_na$meta.low_freq_time) |>
+      purrr::reduce(intersect)
+
+    if(length(common_len)==0) stop("No common low-frequency periods found across the data range.", call. = FALSE)
+
+    dat_no_na_filtered <- dat_no_na |> dplyr::filter(.data$high_freq_pt_norm %in% common_len)
+
+    # Override dat_na_populated with intermediate dat_no_na_filtered
+    dat_na_populated <- dat_no_na_filtered |>
+      dplyr::rename(time_old = "time") |>
+      dplyr::rename(time = "meta.low_freq_time")
+  }
+
+
   dat2 <- dat_na_populated %>%
     dplyr::group_by(time, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) %>%
     dplyr::summarise(
@@ -102,9 +158,15 @@ aggregate_temporal <- function(tdl, to_freq = NULL, silent = FALSE){
     )
 
   # This is very key step. So NA plays a vital role here. na.rm should not be turned on.
-  dat2_no_na <- dat2 %>% filter(!is.na(value.level))
+  dat2_no_na <- dat2 |>
+    dplyr::filter(
+      dplyr::if_all(
+        dplyr::starts_with("value"),
+        ~ !is.na(.x)
+      )
+    )
 
-  if(NROW(dat2_no_na)!=NROW(dat2) && !silent){
+  if(NROW(dat2_no_na)!=NROW(dat2) && !silent && !aggregate_on_incomplete){
     message("Some primay key combinations has incomplete temporal coverage and ",
             "hence not considered for aggregation.")
   }
