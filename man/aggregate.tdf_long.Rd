@@ -6,7 +6,7 @@
 \usage{
 \method{aggregate}{tdf_long}(
   x,
-  type = c("component", "temporal"),
+  type = c("temporal", "component"),
   to_freq = NULL,
   silent = FALSE,
   ...
@@ -16,7 +16,7 @@
 \item{x}{A \code{tdf_long} object containing the time-series data.}
 
 \item{type}{A character string specifying the type of aggregation.
-Must be either \code{"component"} (default) or \code{"temporal"}.}
+Must be either \code{"temporal"} (default) or \code{"component"}.}
 
 \item{to_freq}{The target frequency for temporal aggregation (e.g., \code{"annual"}).
 If left as \code{NULL} (the default) when \code{type = "temporal"}, the function
@@ -40,14 +40,14 @@ hierarchical map) and temporal aggregation (converting to a lower frequency).
 The function operates in one of two modes depending on the \code{type} argument:
 
 \itemize{
-\item \strong{\code{type = "component"}}: Aggregates data dimensionally based on the
-embedded hierarchical map (\code{hmap}). This is a generic framework used to roll up
-granular classifications into higher-level aggregates. For example, aggregating
-sectoral data (Agriculture, Industry, Services) into headline Gross Value Added (GVA).
-
 \item \strong{\code{type = "temporal"}}: Aggregates data over time to convert a
 high-frequency series to a lower frequency. For example, aggregating quarterly
 figures into half-yearly or annual figures. This mode requires the \code{to_freq}
 argument to be specified.
+
+\item \strong{\code{type = "component"}}: Aggregates data dimensionally based on the
+embedded hierarchical map (\code{hmap}). This is a generic framework used to roll up
+granular classifications into higher-level aggregates. For example, aggregating
+sectoral data (Agriculture, Industry, Services) into headline Gross Value Added (GVA).
 }
 }

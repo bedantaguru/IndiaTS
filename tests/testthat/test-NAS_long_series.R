@@ -139,10 +139,7 @@ test_that("NAS long series works on public functions", {
     ol <- list()
 
     ol$quarterly <- qa$high_freq |> aggregate(type = "component")
-
-    # aggregate(type = "component") is by deafult same as aggregate
-    # Testing that too
-    ol$annual <- tla <- qa$low_freq |> aggregate()
+    ol$annual <- tla <- qa$low_freq |> aggregate(type = "component")
 
     ol
   }
