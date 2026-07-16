@@ -14,12 +14,13 @@ viz_echarts_time_series(
   annual_col_name = "annual_vals",
   halyearly_col_name = "halyearly_vals",
   ylim = NULL,
-  title_text = "<Chart Title>",
-  subtitle_text = "<Subtitle>",
+  title_text = NULL,
+  subtitle_text = NULL,
   colors = c("#4472C4", "#00B050", "red", "#E69F00", "#56B4E9"),
   add_zoom = FALSE,
   add_vertical_scrollbar = FALSE,
-  add_horizontal_scrollbar = TRUE
+  add_horizontal_scrollbar = TRUE,
+  add_data_label = FALSE
 )
 }
 \arguments{
@@ -41,9 +42,9 @@ viz_echarts_time_series(
 
 \item{ylim}{Numeric vector of length 2 or \code{NULL}. Optional Y-axis limits (e.g., \code{c(4, 10)}).}
 
-\item{title_text}{Character string. Chart main title.}
+\item{title_text}{Character string or \code{NULL}. Chart main title. Defaults to \code{NULL}.}
 
-\item{subtitle_text}{Character string. Chart subtitle.}
+\item{subtitle_text}{Character string or \code{NULL}. Chart subtitle. Defaults to \code{NULL}.}
 
 \item{colors}{Character vector of hex colors for the series palette.}
 
@@ -52,6 +53,8 @@ viz_echarts_time_series(
 \item{add_vertical_scrollbar}{Logical. Whether to show the vertical Y-axis dataZoom scrollbar. Defaults to \code{FALSE}.}
 
 \item{add_horizontal_scrollbar}{Logical. Whether to show the horizontal X-axis dataZoom scrollbar. Defaults to \code{TRUE}.}
+
+\item{add_data_label}{Logical. Whether to show data labels on the line series. Defaults to \code{FALSE}.}
 }
 \value{
 An \code{echarts4r} htmlwidget object.
@@ -114,7 +117,8 @@ my_quarterly_chart <- viz_echarts_time_series(
   ylim = c(4, 10),
   title_text = "Projections of GDP: Quarterly Path",
   subtitle_text = "(Y-o-Y growth in per cent)",
-  colors = c("#4472C4", "#00B050", "red")
+  colors = c("#4472C4", "#00B050", "red"),
+  add_data_label = TRUE
 )
 
 my_quarterly_chart

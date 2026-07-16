@@ -7,8 +7,8 @@
 viz_excel_chart_layered_axis(
   d,
   file,
-  title = "Time Series",
-  subtitle = "(y-o-y, per cent)",
+  title = NULL,
+  subtitle = NULL,
   sheet = "Data",
   year_col = "year",
   period_col = "period",
@@ -17,7 +17,7 @@ viz_excel_chart_layered_axis(
   ymax = NULL,
   digits = 1L,
   show_avg = TRUE,
-  avg_label = "Last 2-year Average:",
+  avg_label = "Last 2-Year Average:",
   avg_window = 8L,
   add_footnote = TRUE,
   footnote_msg = "Note: * denotes incomplete data.",
@@ -29,8 +29,9 @@ viz_excel_chart_layered_axis(
   if_single_series_disable_legend = TRUE,
   chart_type = c("line", "bar"),
   legend_type = c("type1", "type2"),
-  legend_on_data_till = 1,
-  add_points = FALSE
+  data_label_till = 1,
+  add_points = FALSE,
+  unit_for_summary = ""
 )
 }
 \arguments{
@@ -41,7 +42,7 @@ series, in order, and its column name is used as the series name.}
 
 \item{file}{Output path for the \code{.xlsx} file.}
 
-\item{title, subtitle}{Chart title and (smaller, italic) subtitle.}
+\item{title, subtitle}{Chart title and (smaller, italic) subtitle. Pass \code{NULL} to disable either or both.}
 
 \item{sheet}{Worksheet name.}
 
@@ -98,12 +99,14 @@ or \code{"bar"} (clustered column chart).}
 \code{"type1"} (default, colored text matching series without border) or
 \code{"type2"} (white rectangular box with colored border and black text).}
 
-\item{legend_on_data_till}{Numeric/Integer; number of trailing observations
+\item{data_label_till}{Numeric/Integer; number of trailing observations
 (from the right) on which to display data labels. Can be any number or \code{Inf};
 automatically bounded between \code{0} and the length of the dataset. Default \code{1}.}
 
 \item{add_points}{Logical; if \code{TRUE}, adds circular hollow data point markers
 to line charts. Default \code{FALSE}.}
+
+\item{unit_for_summary}{Character; an optional unit string (e.g., \code{"\%"} or \code{" (Lakhs)"}) to display next to the average values. Default \code{""}.}
 }
 \value{
 (Invisibly) the normalised path to the written file.
@@ -144,8 +147,8 @@ d <- data.frame(
 
 # Standard Line Chart with markers and Boxed Labels on last 3 points
 viz_excel_chart_layered_axis(d, "chart_line.xlsx", title = "Real GVA & GDP",
-                         subtitle = "(\%)", legend_type = "type2",
-                         legend_on_data_till = 3, add_points = TRUE)
+                             subtitle = "(\%)", legend_type = "type2",
+                             data_label_till = 3, add_points = TRUE)
 }
 
 }

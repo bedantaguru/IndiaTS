@@ -450,52 +450,103 @@ compute_deflator_metrics <- function(
 # or `compute_deflator_metrics` depending on the parameters provided.
 # =============================================================================
 
-#' Compute Derived Time-Series Metrics
-#'
-#' @description
-#' A unified entry point to calculate various derived time-series metrics
-#' such as growth rates, momentum, base effects, structural shares, growth contributions,
-#' and deflators.
-#'
-#' @details
-#' The function relies on the presence of a \code{time} column and a \code{value.level}
-#' column within the input data. Depending on the requested metrics, other metadata columns
-#' may be required:
-#' \itemize{
-#'   \item \strong{Shares & Contributions:} Require \code{meta.parent} and
-#'   \code{meta.parent_disaggregation_group} to calculate proportions against a parent total.
-#'   \item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
-#'   "real" and "nominal" pairs to compute the implicit price deflator.
-#' }
-#'
-#' \strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
-#' cannot be computed in the same call because deflator calculations fundamentally reshape
-#' the data by merging real and nominal series. They must be executed in separate calls.
-#'
-#' @param dat A data frame or \code{tdf_long} object containing at least \code{time}
-#' and \code{value.level} columns.
-#'
-#' @param level_prev_prd,level_prev_year Logical. Compute the raw level values of the previous period or previous year.
-#' @param growth_rate,momentum Logical. Compute year-on-year growth rate or period-on-period momentum.
-#' @param ln_growth_rate,ln_momentum Logical. Compute logarithmic versions of growth rate and momentum.
-#' @param base_effect,ln_base_effect Logical. Compute the base effect (negative of previous year's momentum).
-#' @param growth_rate_prev_prd,ln_growth_rate_prev_prd Logical. Extract the growth rate of the previous period.
-#' @param delta_growth_rate,delta_ln_growth_rate Logical. Compute the change in growth rate from the previous period.
-#' @param level_parent Logical. Extract the raw level of the parent component.
-#' @param share_pct,share_prev_prd,share_prev_year Logical. Compute the component's percentage share of the parent total for current, previous period, or previous year.
-#' @param contribution_growth_rate,contribution_momentum Logical. Compute the component's absolute contribution to the parent's growth or momentum.
-#' @param contribution_growth_rate_pct,contribution_momentum_pct Logical. Compute the component's percentage (relative) contribution to the parent's growth or momentum.
-#' @param annual_contribution Logical. Compute the component's share within the annual total.
-#'
-#' @param deflator,deflator_inflation Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE.
-#' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}.
-#'
-#' @return A data frame or \code{tdf_long} object identical to the input, but with
-#' newly appended columns for each requested metric. The new columns will be prefixed
-#' with \code{value.} (e.g., \code{value.growth_rate}).
-#'
+
 #' @export
-compute_metrics <- function(
+compute_metrics.tdf <- function(
+    dat,
+    level_prev_prd               = FALSE,
+    level_prev_year              = FALSE,
+    growth_rate                  = FALSE,
+    momentum                     = FALSE,
+    ln_growth_rate               = FALSE,
+    ln_momentum                  = FALSE,
+    base_effect                  = FALSE,
+    ln_base_effect               = FALSE,
+    growth_rate_prev_prd         = FALSE,
+    ln_growth_rate_prev_prd      = FALSE,
+    delta_growth_rate            = FALSE,
+    delta_ln_growth_rate         = FALSE,
+    level_parent                 = FALSE,
+    share_pct                    = FALSE,
+    share_prev_prd               = FALSE,
+    share_prev_year              = FALSE,
+    contribution_growth_rate     = FALSE,
+    contribution_momentum        = FALSE,
+    contribution_growth_rate_pct = FALSE,
+    contribution_momentum_pct    = FALSE,
+    annual_contribution          = FALSE
+) {
+
+  all_metrics_chk <- c(
+    level_prev_prd = level_prev_prd,
+    level_prev_year = level_prev_year,
+    growth_rate = growth_rate,
+    momentum = momentum,
+    ln_growth_rate = ln_growth_rate,
+    ln_momentum = ln_momentum,
+    base_effect = base_effect,
+    ln_base_effect = ln_base_effect,
+    growth_rate_prev_prd = growth_rate_prev_prd,
+    ln_growth_rate_prev_prd = ln_growth_rate_prev_prd,
+    delta_growth_rate = delta_growth_rate,
+    delta_ln_growth_rate = delta_ln_growth_rate,
+    level_parent = level_parent,
+    share_pct = share_pct,
+    share_prev_prd = share_prev_prd,
+    share_prev_year = share_prev_year,
+    contribution_growth_rate = contribution_growth_rate,
+    contribution_momentum = contribution_momentum,
+    contribution_growth_rate_pct = contribution_growth_rate_pct,
+    contribution_momentum_pct = contribution_momentum_pct,
+    annual_contribution = annual_contribution
+  )
+
+  # Check if more than one is TRUE
+  if (sum(all_metrics_chk, na.rm = TRUE) > 1) {
+    stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE.", call. = FALSE)
+  }
+
+  if(sum(all_metrics_chk, na.rm = TRUE) == 0){
+    return(dat)
+  }
+
+  dl <- as_tdf_long(dat)
+
+  the_requested_measure <- names(which(all_metrics_chk))[1]
+
+  dl2 <- compute_metrics.tdf_long(
+    dl,
+    level_prev_prd = level_prev_prd,
+    level_prev_year = level_prev_year,
+    growth_rate = growth_rate,
+    momentum = momentum,
+    ln_growth_rate = ln_growth_rate,
+    ln_momentum = ln_momentum,
+    base_effect = base_effect,
+    ln_base_effect = ln_base_effect,
+    growth_rate_prev_prd = growth_rate_prev_prd,
+    ln_growth_rate_prev_prd = ln_growth_rate_prev_prd,
+    delta_growth_rate = delta_growth_rate,
+    delta_ln_growth_rate = delta_ln_growth_rate,
+    level_parent = level_parent,
+    share_pct = share_pct,
+    share_prev_prd = share_prev_prd,
+    share_prev_year = share_prev_year,
+    contribution_growth_rate = contribution_growth_rate,
+    contribution_momentum = contribution_momentum,
+    contribution_growth_rate_pct = contribution_growth_rate_pct,
+    contribution_momentum_pct = contribution_momentum_pct,
+    annual_contribution = annual_contribution)
+
+  d2 <- dl2 |> as_tdf(value_name = the_requested_measure)
+
+  stats::na.omit(d2)
+
+}
+
+
+#' @export
+compute_metrics.tdf_long <- function(
     dat,
     level_prev_prd               = FALSE,
     level_prev_year              = FALSE,
@@ -574,6 +625,97 @@ compute_metrics <- function(
     .compute_all                 = .compute_all
   ))
 }
+
+
+#' Compute Derived Time-Series Metrics
+#'
+#' @description
+#' A unified generic entry point to calculate various derived time-series metrics
+#' such as growth rates, momentum, base effects, structural shares, growth contributions,
+#' and deflators. Seamlessly supports both \code{tdf_long} and \code{tdf} formats via S3 dispatch.
+#'
+#' @details
+#' The function relies on the presence of a \code{time} column and a \code{value.level}
+#' column within the input data. Depending on the requested metrics, other metadata columns
+#' may be required:
+#' \itemize{
+#'   \item \strong{Shares & Contributions:} Require \code{meta.parent} and
+#'   \code{meta.parent_disaggregation_group} to calculate proportions against a parent total.
+#'   \item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
+#'   "real" and "nominal" pairs to compute the implicit price deflator.
+#' }
+#'
+#' \strong{Warning for \code{tdf} Inputs:}
+#' When passing a \code{tdf} object (wide format), the function explicitly assumes that
+#' the existing values represent raw \strong{levels}. Ensure your \code{tdf} contains levels
+#' before using this function; attempting to run computations on pre-calculated rates or
+#' indices will result in incorrect mathematical outputs. Additionally, when using a
+#' \code{tdf} object, you may only compute \strong{one} metric per call.
+#' \strong{Note:} Deflator metrics and the \code{.compute_all} argument are \strong{not supported}
+#' for \code{tdf} objects and should only be used with \code{tdf_long}.
+#'
+#' \strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
+#' cannot be computed in the same call because deflator calculations fundamentally reshape
+#' the data by merging real and nominal series. They must be executed in separate calls.
+#'
+#' @param dat A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least
+#' \code{time} and \code{value.level} columns if it is a \code{tdf_long}. If a \code{tdf}
+#' object is provided, its values are assumed to represent levels.
+#'
+#' @param level_prev_prd,level_prev_year Logical. Compute the raw level values of the previous period or previous year.
+#' @param growth_rate,momentum Logical. Compute year-on-year growth rate or period-on-period momentum.
+#' @param ln_growth_rate,ln_momentum Logical. Compute logarithmic versions of growth rate and momentum.
+#' @param base_effect,ln_base_effect Logical. Compute the base effect (negative of previous year's momentum).
+#' @param growth_rate_prev_prd,ln_growth_rate_prev_prd Logical. Extract the growth rate of the previous period.
+#' @param delta_growth_rate,delta_ln_growth_rate Logical. Compute the change in growth rate from the previous period.
+#' @param level_parent Logical. Extract the raw level of the parent component.
+#' @param share_pct,share_prev_prd,share_prev_year Logical. Compute the component's percentage share of the parent total for current, previous period, or previous year.
+#' @param contribution_growth_rate,contribution_momentum Logical. Compute the component's absolute contribution to the parent's growth or momentum.
+#' @param contribution_growth_rate_pct,contribution_momentum_pct Logical. Compute the component's percentage (relative) contribution to the parent's growth or momentum.
+#' @param annual_contribution Logical. Compute the component's share within the annual total.
+#'
+#' @param deflator,deflator_inflation Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE. \strong{Not applicable for \code{tdf} objects.}
+#' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}. \strong{Not applicable for \code{tdf} objects.}
+#'
+#' @return Depending on the input class:
+#' \itemize{
+#'   \item For \code{tdf_long}: Identical to the input, but with newly appended columns for each
+#'   requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+#'   \item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
+#' }
+#'
+#' @export
+compute_metrics <- function(
+    dat,
+    level_prev_prd               = FALSE,
+    level_prev_year              = FALSE,
+    growth_rate                  = FALSE,
+    momentum                     = FALSE,
+    ln_growth_rate               = FALSE,
+    ln_momentum                  = FALSE,
+    base_effect                  = FALSE,
+    ln_base_effect               = FALSE,
+    growth_rate_prev_prd         = FALSE,
+    ln_growth_rate_prev_prd      = FALSE,
+    delta_growth_rate            = FALSE,
+    delta_ln_growth_rate         = FALSE,
+    level_parent                 = FALSE,
+    share_pct                    = FALSE,
+    share_prev_prd               = FALSE,
+    share_prev_year              = FALSE,
+    contribution_growth_rate     = FALSE,
+    contribution_momentum        = FALSE,
+    contribution_growth_rate_pct = FALSE,
+    contribution_momentum_pct    = FALSE,
+    annual_contribution          = FALSE,
+    deflator                     = FALSE,
+    deflator_inflation           = FALSE,
+    .compute_all                 = FALSE
+){
+  UseMethod("compute_metrics")
+}
+
+
 
 
 # =============================================================================

@@ -81,3 +81,13 @@ group_by.tdf_long <- function(.data, ..., .add = FALSE, .drop = dplyr::group_by_
 
   }
 }
+
+
+#' @export
+sort.tdf_long <- function(x, decreasing = FALSE, ...){
+  x |>
+    dplyr::arrange(
+      as.Date(.data$time),
+      .data$meta.name, .data$meta.disaggregation_group,
+      .data$meta.release_tag, .data$meta.price_basis)
+}

@@ -26,7 +26,7 @@
 #'   column per series. Every column other than the key columns becomes a
 #'   series, in order, and its column name is used as the series name.
 #' @param file Output path for the `.xlsx` file.
-#' @param title,subtitle Chart title and (smaller, italic) subtitle.
+#' @param title,subtitle Chart title and (smaller, italic) subtitle. Pass `NULL` to disable either or both.
 #' @param sheet Worksheet name.
 #' @param year_col,period_col Names of the outer (year) and inner (period) axis
 #'   columns. Looked up by name; the function errors if they are absent.
@@ -64,11 +64,12 @@
 #' @param legend_type Character; styling style for end-point data labels:
 #'   `"type1"` (default, colored text matching series without border) or
 #'   `"type2"` (white rectangular box with colored border and black text).
-#' @param legend_on_data_till Numeric/Integer; number of trailing observations
+#' @param data_label_till Numeric/Integer; number of trailing observations
 #'   (from the right) on which to display data labels. Can be any number or `Inf`;
 #'   automatically bounded between `0` and the length of the dataset. Default `1`.
 #' @param add_points Logical; if `TRUE`, adds circular hollow data point markers
 #'   to line charts. Default `FALSE`.
+#' @param unit_for_summary Character; an optional unit string (e.g., `"%"` or `" (Lakhs)"`) to display next to the average values. Default `""`.
 #'
 #' @return (Invisibly) the normalised path to the written file.
 #'
@@ -87,15 +88,15 @@
 #'
 #' # Standard Line Chart with markers and Boxed Labels on last 3 points
 #' viz_excel_chart_layered_axis(d, "chart_line.xlsx", title = "Real GVA & GDP",
-#'                          subtitle = "(%)", legend_type = "type2",
-#'                          legend_on_data_till = 3, add_points = TRUE)
+#'                              subtitle = "(%)", legend_type = "type2",
+#'                              data_label_till = 3, add_points = TRUE)
 #' }
 #'
 #' @keywords internal
 viz_excel_chart_layered_axis <- function(
     d, file,
-    title             = "Time Series",
-    subtitle          = "(y-o-y, per cent)",
+    title             = NULL,
+    subtitle          = NULL,
     sheet             = "Data",
     year_col          = "year",
     period_col        = "period",
@@ -104,7 +105,7 @@ viz_excel_chart_layered_axis <- function(
     ymax              = NULL,
     digits            = 1L,
     show_avg          = TRUE,
-    avg_label         = "Last 2-year Average:",
+    avg_label         = "Last 2-Year Average:",
     avg_window        = 8L,
     add_footnote      = TRUE,
     footnote_msg      = "Note: * denotes incomplete data.",
@@ -116,8 +117,9 @@ viz_excel_chart_layered_axis <- function(
     if_single_series_disable_legend = TRUE,
     chart_type        = c("line", "bar"),
     legend_type       = c("type1", "type2"),
-    legend_on_data_till = 1,
-    add_points        = FALSE) {
+    data_label_till   = 1,
+    add_points        = FALSE,
+    unit_for_summary  = "") {
 
   ## ---- validate inputs ----------------------------------------------------
   if (!is.data.frame(d)) stop("`d` must be a data frame.")
@@ -167,14 +169,14 @@ viz_excel_chart_layered_axis <- function(
   })
   n <- nrow(d)
 
-  ## ---- preprocess legend_on_data_till bounds -----------------------------
-  legend_on_data_till <- suppressWarnings(as.numeric(legend_on_data_till)[1L])
-  if (is.na(legend_on_data_till) || legend_on_data_till < 0) {
-    legend_on_data_till <- 0L
-  } else if (is.infinite(legend_on_data_till) || legend_on_data_till > n) {
-    legend_on_data_till <- as.integer(n)
+  ## ---- preprocess data_label_till bounds -----------------------------
+  data_label_till <- suppressWarnings(as.numeric(data_label_till)[1L])
+  if (is.na(data_label_till) || data_label_till < 0) {
+    data_label_till <- 0L
+  } else if (is.infinite(data_label_till) || data_label_till > n) {
+    data_label_till <- as.integer(n)
   } else {
-    legend_on_data_till <- as.integer(legend_on_data_till)
+    data_label_till <- as.integer(data_label_till)
   }
 
   ## ---- colours, number format, incomplete flags --------------------------
@@ -294,12 +296,42 @@ viz_excel_chart_layered_axis <- function(
   }
 
   ## ---- embedded templates -------------------------------------------------
-  head_tpl <- paste0(
+
+  # Dynamic construction of the chart header/title template
+  head_start_tpl <- paste0(
     "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:c16r2=\"http://schemas.microsoft.com/office/drawing/2015/06/chart\"><c:date1904 val=\"0\"/><c:lang val=\"en-GB\"/><c:roundedCorners val=\"0\"/><mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\"><mc:Choice Requires=\"c14\" xmlns:c14=\"http://schemas.microsoft.com/office/drawing/2007/8/2/chart\"><c14:style val=\"102\"/></mc:Choice><mc:Fallback><c:style val=\"2\"/></mc:Fallback></mc:AlternateContent>",
-    "<c:clrMapOvr bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/><c:chart><c:title><c:tx><c:rich><a:bodyPr rot=\"0\" spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1400\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" kern=\"1200\" spc=\"0\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:r><a:rPr lang=\"en-IN\" sz=\"1800\" b=\"1\" i=\"0\" baseline=\"0\"><a:solidFill>",
-    "<a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr><a:t>###TITLE###</a:t></a:r><a:br><a:rPr lang=\"en-IN\" sz=\"1800\" b=\"1\" i=\"0\" baseline=\"0\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr></a:br><a:r><a:rPr lang=\"en-IN\" sz=\"1000\" b=\"0\" i=\"1\" baseline=\"0\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr><a:t>###SUBTITLE###</a:t></a:r><a:endParaRPr lang=\"en-GB\" sz=\"1000\" b=\"0\" i=\"1\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:endParaRPr></a:p></c:rich></c:tx><c:overlay val=\"0\"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr rot=\"0\" spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr>",
-    "<a:defRPr sz=\"1400\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" kern=\"1200\" spc=\"0\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title><c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/>###CHART_OPEN###"
+    "<c:clrMapOvr bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/><c:chart>"
   )
+
+  title_xml <- ""
+  if (!is.null(title) || !is.null(subtitle)) {
+    t_run <- ""
+    if (!is.null(title)) {
+      t_run <- paste0("<a:r><a:rPr lang=\"en-IN\" sz=\"1800\" b=\"1\" i=\"0\" baseline=\"0\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr><a:t>", xesc(title), "</a:t></a:r>")
+    }
+
+    s_run <- ""
+    if (!is.null(subtitle)) {
+      s_run <- paste0("<a:r><a:rPr lang=\"en-IN\" sz=\"1000\" b=\"0\" i=\"1\" baseline=\"0\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr><a:t>", xesc(subtitle), "</a:t></a:r>")
+    }
+
+    sep_run <- ""
+    if (!is.null(title) && !is.null(subtitle)) {
+      sep_run <- "<a:br><a:rPr lang=\"en-IN\" sz=\"1800\" b=\"1\" i=\"0\" baseline=\"0\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:rPr></a:br>"
+    }
+
+    title_xml <- paste0(
+      "<c:title><c:tx><c:rich><a:bodyPr rot=\"0\" spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1400\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" kern=\"1200\" spc=\"0\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr>",
+      t_run,
+      sep_run,
+      s_run,
+      "<a:endParaRPr lang=\"en-GB\" sz=\"1000\" b=\"0\" i=\"1\"><a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill><a:effectLst/></a:endParaRPr></a:p></c:rich></c:tx><c:overlay val=\"0\"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr rot=\"0\" spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1400\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" kern=\"1200\" spc=\"0\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>"
+    )
+  }
+
+  head_end_tpl <- "<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/>###CHART_OPEN###"
+  head_tpl <- paste0(head_start_tpl, title_xml, head_end_tpl)
+
   ser_tpl <- paste0(
     "<c:ser><c:idx val=\"###SIDX###\"/><c:order val=\"###SIDX###\"/><c:tx><c:strRef><c:f>###NAMEREF###</c:f><c:strCache><c:ptCount val=\"1\"/><c:pt idx=\"0\"><c:v>###SNAME###</c:v></c:pt></c:strCache></c:strRef></c:tx><c:spPr>###SER_SPPR###</c:spPr>###SER_MK###<c:dLbls>###DLBLS_ITEMS###<c:spPr>###DLBL_SPPR###</c:spPr><c:txPr><a:bodyPr rot=\"0\" spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" lIns=\"38100\" tIns=\"19050\" rIns=\"38100\" bIns=\"19050\" anchor=\"ctr\" anchorCtr=\"1\"><a:spAutoFit/></a:bodyPr><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"900\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" kern=\"1200\" baseline=\"0\"><a:solidFill>###DLBL_TXCLR###</a:solidFill><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr><c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/><c:showCatName val=\"0\"/><c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/><c:extLst><c:ext uri=\"{CE6537A1-D6FC-4f65-9D91-7224C49458BB}\" xmlns:c15=\"http://schemas.microsoft.com/office/drawing/2012/chart\"><c15:showLeaderLines val=\"1\"/><c15:leaderLines><c:spPr><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"35000\"/><a:lumOff val=\"65000\"/></a:schemeClr></a:solidFill><a:round/></a:ln><a:effectLst/></c:spPr></c15:leaderLines></c:ext></c:extLst></c:dLbls>###CATXML###<c:val><c:numRef><c:f>###VALREF###</c:f>###NUMCACHE###</c:numRef></c:val>###SER_SM###</c:ser>"
   )
@@ -318,7 +350,7 @@ viz_excel_chart_layered_axis <- function(
     "<a:lvl7pPr marL=\"2743200\" indent=\"0\"><a:defRPr sz=\"1100\"><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:lvl7pPr><a:lvl8pPr marL=\"3200400\" indent=\"0\"><a:defRPr sz=\"1100\"><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:lvl8pPr><a:lvl9pPr marL=\"3657600\" indent=\"0\"><a:defRPr sz=\"1100\"><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/><a:cs typeface=\"+mn-cs\"/></a:defRPr></a:lvl9pPr></a:lstStyle>",
     "<a:p xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:r><a:rPr lang=\"en-IN\" b=\"1\" i=\"1\" dirty=\"0\"><a:latin typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Cambria\" panose=\"02040503050406030204\" pitchFamily=\"18\" charset=\"0\"/></a:rPr><a:t>###AVG_LABEL###</a:t></a:r><a:endParaRPr lang=\"en-GB\" sz=\"1200\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/></a:endParaRPr></a:p>"
   )
-  bullet_tpl <- r"----(<a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:pPr marL="342900" lvl="0" indent="-342900"><a:buFont typeface="###BUFONT###" panose="05000000000000000000" pitchFamily="2" charset="2"/><a:buChar char="###BUCHAR###"/></a:pPr><a:r><a:rPr lang="en-IN" b="1" i="1" dirty="0"><a:solidFill><a:srgbClr val="###HEX###"/></a:solidFill><a:latin typeface="Cambria" panose="02040503050406030204" pitchFamily="18" charset="0"/><a:ea typeface="Cambria" panose="02040503050406030204" pitchFamily="18" charset="0"/></a:rPr><a:t>###BNAME###: ###BVAL###%</a:t></a:r><a:endParaRPr lang="en-GB" sz="1200" dirty="0"><a:solidFill><a:srgbClr val="###HEX###"/></a:solidFill><a:latin typeface="Times New Roman" panose="02020603050405020304" pitchFamily="18" charset="0"/><a:ea typeface="Times New Roman" panose="02020603050405020304" pitchFamily="18" charset="0"/></a:endParaRPr></a:p>)----"
+  bullet_tpl <- r"----(<a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:pPr marL="342900" lvl="0" indent="-342900"><a:buFont typeface="###BUFONT###" panose="05000000000000000000" pitchFamily="2" charset="2"/><a:buChar char="###BUCHAR###"/></a:pPr><a:r><a:rPr lang="en-IN" b="1" i="1" dirty="0"><a:solidFill><a:srgbClr val="###HEX###"/></a:solidFill><a:latin typeface="Cambria" panose="02040503050406030204" pitchFamily="18" charset="0"/><a:ea typeface="Cambria" panose="02040503050406030204" pitchFamily="18" charset="0"/></a:rPr><a:t>###BNAME###: ###BVAL######UNIT###</a:t></a:r><a:endParaRPr lang="en-GB" sz="1200" dirty="0"><a:solidFill><a:srgbClr val="###HEX###"/></a:solidFill><a:latin typeface="Times New Roman" panose="02020603050405020304" pitchFamily="18" charset="0"/><a:ea typeface="Times New Roman" panose="02020603050405020304" pitchFamily="18" charset="0"/></a:endParaRPr></a:p>)----"
   avg_tail_tpl <- r"----(</cdr:txBody></cdr:sp></cdr:relSizeAnchor>)----"
   foot_tpl <- paste0(
     "<cdr:relSizeAnchor xmlns:cdr=\"http://schemas.openxmlformats.org/drawingml/2006/chartDrawing\"><cdr:from><cdr:x>0.00928</cdr:x><cdr:y>0.93385</cdr:y></cdr:from><cdr:to><cdr:x>0.50045</cdr:x><cdr:y>1</cdr:y></cdr:to><cdr:sp macro=\"\" textlink=\"\"><cdr:nvSpPr><cdr:cNvPr id=\"3\" name=\"TextBox 1\"><a:extLst xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:ext uri=\"{FF2B5EF4-FFF2-40B4-BE49-F238E27FC236}\"><a16:creationId xmlns:a16=\"http://schemas.microsoft.com/office/drawing/2014/main\" id=\"{B2BC695D-7D6B-49F0-715F-6870393C64A1}\"/></a:ext></a:extLst></cdr:cNvPr><cdr:cNvSpPr txBox=\"1\"/></cdr:nvSpPr>",
@@ -343,7 +375,7 @@ viz_excel_chart_layered_axis <- function(
     L <- col_letter(col_off + j); hexc <- cols[j]
     dpts <- if (has_inc) paste0(sprintf(dpt_one, inc, hexc), collapse = "") else ""
 
-    lbl_idxs <- if (legend_on_data_till > 0L) seq(from = n - legend_on_data_till, to = n - 1L, by = 1L) else integer(0)
+    lbl_idxs <- if (data_label_till > 0L) seq(from = n - data_label_till, to = n - 1L, by = 1L) else integer(0)
     lbl_idxs <- lbl_idxs[!is.na(series[[j]][lbl_idxs + 1L])]
     dlbl_one <- '<c:dLbl><c:idx val="%d"/><c:layout/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbl>'
     dlbls_items <- paste0(sprintf(dlbl_one, lbl_idxs), collapse = "")
@@ -377,10 +409,8 @@ viz_excel_chart_layered_axis <- function(
   tail_xml <- gsub("###YMIN###", nm(ymin), gsub("###YMAX###", nm(ymax), tail_xml, fixed = TRUE), fixed = TRUE)
   tail_xml <- gsub("###CATGRID###", if (isTRUE(enable_gridline)) grid_cat else "", tail_xml, fixed = TRUE)
   tail_xml <- gsub("###VALGRID###", if (isTRUE(enable_gridline)) grid_val else "", tail_xml, fixed = TRUE)
-  chart_xml <- paste0(gsub("###CHART_OPEN###", ct_cfg$open,
-                           gsub("###SUBTITLE###", xesc(subtitle),
-                                gsub("###TITLE###", xesc(title), head_tpl, fixed = TRUE), fixed = TRUE), fixed = TRUE),
-                      sers, tail_xml)
+
+  chart_xml <- paste0(gsub("###CHART_OPEN###", ct_cfg$open, head_tpl, fixed = TRUE), sers, tail_xml)
 
   ## ---- user-shapes: average box and/or footnote ---------------------------
   need_foot <- isTRUE(add_footnote) && has_inc
@@ -400,7 +430,8 @@ viz_excel_chart_layered_axis <- function(
         b <- gsub("###BUCHAR###", bd$char, b, fixed = TRUE)
         b <- gsub("###HEX###",    cols[j], b, fixed = TRUE)
         b <- gsub("###BNAME###",  xesc(snames[j]), b, fixed = TRUE)
-        gsub("###BVAL###", fnum(avgs[j]), b, fixed = TRUE)
+        b <- gsub("###BVAL###", fnum(avgs[j]), b, fixed = TRUE)
+        gsub("###UNIT###", xesc(unit_for_summary), b, fixed = TRUE)
       }, character(1L)), collapse = "")
       inner <- paste0(inner, ah, bullets, avg_tail_tpl)
     }

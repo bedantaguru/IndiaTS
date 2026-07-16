@@ -33,8 +33,9 @@ compute_metrics(
 )
 }
 \arguments{
-\item{dat}{A data frame or \code{tdf_long} object containing at least \code{time}
-and \code{value.level} columns.}
+\item{dat}{A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least
+\code{time} and \code{value.level} columns if it is a \code{tdf_long}. If a \code{tdf}
+object is provided, its values are assumed to represent levels.}
 
 \item{level_prev_prd, level_prev_year}{Logical. Compute the raw level values of the previous period or previous year.}
 
@@ -58,19 +59,22 @@ and \code{value.level} columns.}
 
 \item{annual_contribution}{Logical. Compute the component's share within the annual total.}
 
-\item{deflator, deflator_inflation}{Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE.}
+\item{deflator, deflator_inflation}{Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE. \strong{Not applicable for \code{tdf} objects.}}
 
-\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}.}
+\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}. \strong{Not applicable for \code{tdf} objects.}}
 }
 \value{
-A data frame or \code{tdf_long} object identical to the input, but with
-newly appended columns for each requested metric. The new columns will be prefixed
-with \code{value.} (e.g., \code{value.growth_rate}).
+Depending on the input class:
+\itemize{
+\item For \code{tdf_long}: Identical to the input, but with newly appended columns for each
+requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+\item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
+}
 }
 \description{
-A unified entry point to calculate various derived time-series metrics
+A unified generic entry point to calculate various derived time-series metrics
 such as growth rates, momentum, base effects, structural shares, growth contributions,
-and deflators.
+and deflators. Seamlessly supports both \code{tdf_long} and \code{tdf} formats via S3 dispatch.
 }
 \details{
 The function relies on the presence of a \code{time} column and a \code{value.level}
@@ -82,6 +86,15 @@ may be required:
 \item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
 "real" and "nominal" pairs to compute the implicit price deflator.
 }
+
+\strong{Warning for \code{tdf} Inputs:}
+When passing a \code{tdf} object (wide format), the function explicitly assumes that
+the existing values represent raw \strong{levels}. Ensure your \code{tdf} contains levels
+before using this function; attempting to run computations on pre-calculated rates or
+indices will result in incorrect mathematical outputs. Additionally, when using a
+\code{tdf} object, you may only compute \strong{one} metric per call.
+\strong{Note:} Deflator metrics and the \code{.compute_all} argument are \strong{not supported}
+for \code{tdf} objects and should only be used with \code{tdf_long}.
 
 \strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
 cannot be computed in the same call because deflator calculations fundamentally reshape

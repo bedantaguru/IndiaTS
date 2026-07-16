@@ -1,4 +1,3 @@
-
 #' Create a Layered ECharts Time Series Visualization (Internal)
 #'
 #' Writes an interactive time-series line chart using `echarts4r` from a tidy dataframe.
@@ -14,12 +13,13 @@
 #' @param annual_col_name Character string or `NULL`. Optional column name for annual reference lines (rendered as dotted markLines).
 #' @param halyearly_col_name Character string or `NULL`. Optional column name for half-yearly reference lines (rendered as dotted markLines).
 #' @param ylim Numeric vector of length 2 or `NULL`. Optional Y-axis limits (e.g., `c(4, 10)`).
-#' @param title_text Character string. Chart main title.
-#' @param subtitle_text Character string. Chart subtitle.
+#' @param title_text Character string or `NULL`. Chart main title. Defaults to `NULL`.
+#' @param subtitle_text Character string or `NULL`. Chart subtitle. Defaults to `NULL`.
 #' @param colors Character vector of hex colors for the series palette.
 #' @param add_zoom Logical. Whether to enable the top-right toolbox zoom and reset icons. Defaults to `FALSE`.
 #' @param add_vertical_scrollbar Logical. Whether to show the vertical Y-axis dataZoom scrollbar. Defaults to `FALSE`.
 #' @param add_horizontal_scrollbar Logical. Whether to show the horizontal X-axis dataZoom scrollbar. Defaults to `TRUE`.
+#' @param add_data_label Logical. Whether to show data labels on the line series. Defaults to `FALSE`.
 #'
 #' @return An `echarts4r` htmlwidget object.
 #' @keywords internal
@@ -76,7 +76,8 @@
 #'   ylim = c(4, 10),
 #'   title_text = "Projections of GDP: Quarterly Path",
 #'   subtitle_text = "(Y-o-Y growth in per cent)",
-#'   colors = c("#4472C4", "#00B050", "red")
+#'   colors = c("#4472C4", "#00B050", "red"),
+#'   add_data_label = TRUE
 #' )
 #'
 #' my_quarterly_chart
@@ -136,12 +137,13 @@ viz_echarts_time_series <- function(
     annual_col_name = "annual_vals",
     halyearly_col_name = "halyearly_vals",
     ylim = NULL,
-    title_text = "<Chart Title>",
-    subtitle_text = "<Subtitle>",
+    title_text = NULL,
+    subtitle_text = NULL,
     colors = c("#4472C4", "#00B050", "red", "#E69F00", "#56B4E9"),
     add_zoom = FALSE,
     add_vertical_scrollbar = FALSE,
-    add_horizontal_scrollbar = TRUE
+    add_horizontal_scrollbar = TRUE,
+    add_data_label = FALSE
 ) {
 
   # ---------------------------------------------------------
@@ -269,7 +271,7 @@ viz_echarts_time_series <- function(
           echarts4r::e_line_(
             serie = col, name = col, color = col_color, symbolSize = 8,
             lineStyle = list(width = 3, type = "solid"),
-            label = list(show = TRUE, position = "bottom", color = "black", fontWeight = "bold")
+            label = list(show = add_data_label, position = "bottom", color = "black", fontWeight = "bold")
           )
         color_idx <- color_idx + 1
       }
@@ -288,7 +290,7 @@ viz_echarts_time_series <- function(
           echarts4r::e_line_(
             serie = col, name = col, color = col_color, symbolSize = 8,
             lineStyle = list(type = "dashed", width = 3),
-            label = list(show = TRUE, formatter = label_fmt, position = lbl_pos,
+            label = list(show = add_data_label, formatter = label_fmt, position = lbl_pos,
                          rich = list(startBox = style_inv, usualBox = style_box(col_color)))
           )
         color_idx <- color_idx + 1
@@ -414,15 +416,43 @@ viz_echarts_time_series <- function(
     }
   }
 
+
   # ---------------------------------------------------------
   # 6A. Layout, Formatting, and Axis Configuration
   # ---------------------------------------------------------
+
+  # Determine exactly what text elements are present
+  has_main <- !is.null(title_text) && title_text != ""
+  has_sub  <- !is.null(subtitle_text) && subtitle_text != ""
+
+  # Set dynamic top margins based on 3 distinct states
+  if (has_main && has_sub) {
+    legend_top <- "10%" # Adjusted slightly up since we shrunk itemGap
+    grid_top   <- "20%"
+  } else if (has_main || has_sub) {
+    legend_top <- "8%"  # Medium margin if only title OR subtitle exists
+    grid_top   <- "18%"
+  } else {
+    legend_top <- "2%"  # Minimum margin if completely empty
+    grid_top   <- "12%"
+  }
+
+  # Conditionally add titles if they are provided
+  if (has_main || has_sub) {
+    my_chart <- my_chart |>
+      echarts4r::e_title(
+        text = if (has_main) title_text else "",
+        subtext = if (has_sub) subtitle_text else "",
+        left = "center",
+        itemGap = 4, # <-- This reduces the gap between title and subtitle
+        textStyle = list(fontWeight = "bold", fontSize = 16),
+        subtextStyle = list(color = "black", fontWeight = "normal", fontStyle = "italic", fontSize = 14)
+      )
+  }
+
   my_chart <- my_chart |>
-    echarts4r::e_title(title_text, subtitle_text, left = "center",
-                       textStyle = list(fontWeight = "bold", fontSize = 16),
-                       subtextStyle = list(color = "black", fontWeight = "bold", fontSize = 14)) |>
-    echarts4r::e_legend(top = "15%", itemWidth = 30) |>
-    echarts4r::e_grid(top = "25%", bottom = "15%") |>
+    echarts4r::e_legend(top = legend_top, itemWidth = 30) |>
+    echarts4r::e_grid(top = grid_top, bottom = "15%") |>
     echarts4r::e_tooltip(trigger = "axis", formatter = tooltip_fmt)
 
   if (!is.null(ylim) && length(ylim) == 2) {
