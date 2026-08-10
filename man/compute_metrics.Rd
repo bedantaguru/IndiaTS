@@ -4,70 +4,74 @@
 \alias{compute_metrics}
 \title{Compute Derived Time-Series Metrics}
 \usage{
-compute_metrics(
-  dat,
-  level_prev_prd = FALSE,
-  level_prev_year = FALSE,
-  growth_rate = FALSE,
-  momentum = FALSE,
-  ln_growth_rate = FALSE,
-  ln_momentum = FALSE,
-  base_effect = FALSE,
-  ln_base_effect = FALSE,
-  growth_rate_prev_prd = FALSE,
-  ln_growth_rate_prev_prd = FALSE,
-  delta_growth_rate = FALSE,
-  delta_ln_growth_rate = FALSE,
-  level_parent = FALSE,
-  share_pct = FALSE,
-  share_prev_prd = FALSE,
-  share_prev_year = FALSE,
-  contribution_growth_rate = FALSE,
-  contribution_momentum = FALSE,
-  contribution_growth_rate_pct = FALSE,
-  contribution_momentum_pct = FALSE,
-  annual_contribution = FALSE,
-  deflator = FALSE,
-  deflator_inflation = FALSE,
-  .compute_all = FALSE
-)
+compute_metrics(dat, ...)
 }
 \arguments{
-\item{dat}{A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least
-\code{time} and \code{value.level} columns if it is a \code{tdf_long}. If a \code{tdf}
-object is provided, its values are assumed to represent levels.}
+\item{dat}{A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
+and \code{value.level} columns.}
 
-\item{level_prev_prd, level_prev_year}{Logical. Compute the raw level values of the previous period or previous year.}
+\item{...}{Additional arguments passed to methods.}
 
-\item{growth_rate, momentum}{Logical. Compute year-on-year growth rate or period-on-period momentum.}
+\item{level_prev_prd}{Logical. Compute Previous Period Level.}
 
-\item{ln_growth_rate, ln_momentum}{Logical. Compute logarithmic versions of growth rate and momentum.}
+\item{level_prev_year}{Logical. Compute Previous Year Level.}
 
-\item{base_effect, ln_base_effect}{Logical. Compute the base effect (negative of previous year's momentum).}
+\item{growth_rate}{Logical. Compute Growth Rate (YoY).}
 
-\item{growth_rate_prev_prd, ln_growth_rate_prev_prd}{Logical. Extract the growth rate of the previous period.}
+\item{momentum}{Logical. Compute Momentum (PoP).}
 
-\item{delta_growth_rate, delta_ln_growth_rate}{Logical. Compute the change in growth rate from the previous period.}
+\item{ln_growth_rate}{Logical. Compute Log Growth Rate (YoY).}
 
-\item{level_parent}{Logical. Extract the raw level of the parent component.}
+\item{ln_momentum}{Logical. Compute Log Momentum (PoP).}
 
-\item{share_pct, share_prev_prd, share_prev_year}{Logical. Compute the component's percentage share of the parent total for current, previous period, or previous year.}
+\item{base_effect}{Logical. Compute Base Effect.}
 
-\item{contribution_growth_rate, contribution_momentum}{Logical. Compute the component's absolute contribution to the parent's growth or momentum.}
+\item{ln_base_effect}{Logical. Compute Log Base Effect.}
 
-\item{contribution_growth_rate_pct, contribution_momentum_pct}{Logical. Compute the component's percentage (relative) contribution to the parent's growth or momentum.}
+\item{growth_rate_prev_prd}{Logical. Compute Previous Period Growth.}
 
-\item{annual_contribution}{Logical. Compute the component's share within the annual total.}
+\item{ln_growth_rate_prev_prd}{Logical. Compute Previous Period Log Growth.}
 
-\item{deflator, deflator_inflation}{Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE. \strong{Not applicable for \code{tdf} objects.}}
+\item{delta_growth_rate}{Logical. Compute Delta Growth Rate.}
 
-\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}. \strong{Not applicable for \code{tdf} objects.}}
+\item{delta_ln_growth_rate}{Logical. Compute Delta Log Growth.}
+
+\item{level_parent}{Logical. Compute Parent Level. Requires \code{meta.parent} hierarchy columns.}
+
+\item{share_pct}{Logical. Compute Share (\%). Requires \code{meta.parent} hierarchy columns.}
+
+\item{share_prev_prd}{Logical. Compute Previous Period Share. Requires \code{meta.parent} hierarchy columns.}
+
+\item{share_prev_year}{Logical. Compute Previous Year Share. Requires \code{meta.parent} hierarchy columns.}
+
+\item{contribution_growth_rate}{Logical. Compute Growth Contribution. Requires \code{meta.parent} hierarchy columns.}
+
+\item{contribution_momentum}{Logical. Compute Momentum Contribution. Requires \code{meta.parent} hierarchy columns.}
+
+\item{contribution_growth_rate_pct}{Logical. Compute Relative Growth Contribution (\%). Requires \code{meta.parent} hierarchy columns.}
+
+\item{contribution_momentum_pct}{Logical. Compute Relative Momentum Contribution (\%). Requires \code{meta.parent} hierarchy columns.}
+
+\item{annual_contribution}{Logical. Compute Annual Contribution.}
+
+\item{SA}{Logical. Compute Seasonal Adjustment. Requires quarterly or monthly frequency.}
+
+\item{seasonally_adjusted}{Logical. Compute Seasonally Adjusted Level. Requires quarterly or monthly frequency.}
+
+\item{SAAR}{Logical. Compute SAAR (Seasonally Adjusted Annual Rate). Requires quarterly or monthly frequency.}
+
+\item{deflator}{Logical. Compute the Implicit Price Deflator. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.}
+
+\item{deflator_inflation}{Logical. Compute Deflator Inflation. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.}
+
+\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if a deflator flag is triggered). Default is \code{FALSE}.}
+
+\item{.avoid_during_compute_all}{Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.}
 }
 \value{
 Depending on the input class:
 \itemize{
-\item For \code{tdf_long}: Identical to the input, but with newly appended columns for each
-requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+\item For \code{tdf_long}: Identical to the input, but with newly appended columns for each requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
 \item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
 }
 }
@@ -77,26 +81,17 @@ such as growth rates, momentum, base effects, structural shares, growth contribu
 and deflators. Seamlessly supports both \code{tdf_long} and \code{tdf} formats via S3 dispatch.
 }
 \details{
-The function relies on the presence of a \code{time} column and a \code{value.level}
-column within the input data. Depending on the requested metrics, other metadata columns
-may be required:
+The calculation engine is driven by a declarative metric registry and a topological
+dependency graph. If you request a complex metric (e.g., \code{contribution_growth_rate}),
+the engine will automatically resolve and compute all prerequisites (e.g., \code{share_prev_year}
+and \code{growth_rate}) in the correct chronological order.
+
+\strong{Important Limitations:}
 \itemize{
-\item \strong{Shares & Contributions:} Require \code{meta.parent} and
-\code{meta.parent_disaggregation_group} to calculate proportions against a parent total.
-\item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
-"real" and "nominal" pairs to compute the implicit price deflator.
+\item \strong{Standard vs. Deflator:} Standard metrics and Deflator metrics cannot be computed
+in the same call. They must be executed separately.
+\item \strong{Wide \code{tdf} Objects:} When passing a \code{tdf} object (wide format), you may
+only compute \strong{one} metric per call. \code{.compute_all} and deflator calculations are not
+supported for \code{tdf} objects.
 }
-
-\strong{Warning for \code{tdf} Inputs:}
-When passing a \code{tdf} object (wide format), the function explicitly assumes that
-the existing values represent raw \strong{levels}. Ensure your \code{tdf} contains levels
-before using this function; attempting to run computations on pre-calculated rates or
-indices will result in incorrect mathematical outputs. Additionally, when using a
-\code{tdf} object, you may only compute \strong{one} metric per call.
-\strong{Note:} Deflator metrics and the \code{.compute_all} argument are \strong{not supported}
-for \code{tdf} objects and should only be used with \code{tdf_long}.
-
-\strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
-cannot be computed in the same call because deflator calculations fundamentally reshape
-the data by merging real and nominal series. They must be executed in separate calls.
 }

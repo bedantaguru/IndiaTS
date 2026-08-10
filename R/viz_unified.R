@@ -8,6 +8,8 @@ viz_unified <- function(
     single_layer_monthly = TRUE,
     second_layer_monthly = c("fy","calender"),
     num_digits_for_round = 1, type = c("echarts","excel"),
+    asterisk_data_till = 0,
+    asterisk_data_time_points =  NULL,
     title = NULL, subtitle = NULL,
     ...){
 
@@ -26,7 +28,8 @@ viz_unified <- function(
   }
 
   # Simplify TDF
-  pd <- dplyr::as_tibble(td)
+  pd <- sort(td)
+  pd <- dplyr::as_tibble(pd)
 
   if(na_omit){
     pd <- stats::na.omit(pd)
@@ -49,6 +52,19 @@ viz_unified <- function(
       ),
       call. = FALSE
     )
+  }
+
+  # Asterisk data (like incomplete, special case etc. Only one such case is handled here.)
+
+  pd$.is_asterisk <- FALSE
+
+  asterisk_data_till <- as.integer(asterisk_data_till)
+  if(asterisk_data_till>0 && length(asterisk_data_time_points)==0){
+    asterisk_data_time_points <- sort(pd$time, decreasing = TRUE)[1:asterisk_data_till]
+  }
+
+  if(length(asterisk_data_time_points)>0){
+    pd$.is_asterisk[pd$time %in% asterisk_data_time_points] <- TRUE
   }
 
   # Note: single layer for month and year and double layer for quarter and half year
@@ -86,6 +102,12 @@ viz_unified <- function(
         )
       )
 
+    # asterisk data type handling
+    if(type == "excel"){
+      pd1$prd[pd1$.is_asterisk] <- paste0("*", pd1$prd[pd1$.is_asterisk])
+    }
+    pd1$.is_asterisk <- NULL
+
     if(type == "echarts"){
       return(
         viz_echarts_time_series(
@@ -122,6 +144,12 @@ viz_unified <- function(
           ~ base::round(.x, num_digits_for_round)
         )
       )
+
+    # asterisk data type handling
+    if(type == "excel"){
+      pd1$time[pd1$.is_asterisk] <- paste0("*", pd1$time[pd1$.is_asterisk])
+    }
+    pd1$.is_asterisk <- NULL
 
     if(type == "echarts"){
       return(

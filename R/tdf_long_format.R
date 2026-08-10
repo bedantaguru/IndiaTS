@@ -385,3 +385,32 @@ tdf_long_check_shallow <- function(obj, return_result = FALSE){
 
   return(invisible(TRUE))
 }
+
+is_valid_derived_tdf_long <- function(df_main, df_derived){
+
+  if(NROW(df_main)!=NROW(df_derived)) return(FALSE)
+
+  chk <- df_main |>
+    dplyr::anti_join(
+      df_derived,
+      by = intersect(colnames(df_main), colnames(df_derived)))
+
+  if(NROW(chk)>0) return(FALSE)
+
+  chk <- df_derived |>
+    dplyr::anti_join(
+      df_main,
+      by = intersect(colnames(df_main), colnames(df_derived)))
+
+  if(NROW(chk)>0) return(FALSE)
+
+  ats <- attributes(df_main)
+  ats_der <- attributes(df_derived)
+
+  if(!identical(ats$hmap, ats_der$hmap)) return(FALSE)
+
+  if(length(setdiff(ats$class, ats_der$class))!=0) return(FALSE)
+
+  return(TRUE)
+}
+

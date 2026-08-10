@@ -60,12 +60,14 @@
 #' @export
 plot.tdf <- function(
     x,
+    type = c("echarts","excel"),
     xl_file,
     na_omit = TRUE,
     single_layer_monthly = TRUE,
     second_layer_monthly = c("fy","calender"),
     num_digits_for_round = 1,
-    type = c("echarts","excel"),
+    asterisk_data_till = 0,
+    asterisk_data_time_points = NULL,
     title = NULL,
     subtitle = NULL,
     ...) {
@@ -80,6 +82,8 @@ plot.tdf <- function(
     type = type,
     title = title,
     subtitle = subtitle,
+    asterisk_data_time_points = asterisk_data_time_points,
+    asterisk_data_till = asterisk_data_till,
     ...
   )
 }

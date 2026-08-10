@@ -105,7 +105,11 @@ as_tdf <- function(df, allow_discontinuous = TRUE, fiscal_type = TRUE, value_nam
 }
 
 #' @export
-as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_group = NULL, divergence_tol_pct = 5, ...){
+as_tdf.tdf_long <- function(
+    df,
+    value_name = NULL, names = NULL, disaggregation_group = NULL,
+    divergence_tol_pct = 5,
+    add_price_basis_as_tag, use_short_names = FALSE, ...){
 
   if(is.null(value_name)){
     value_name <- colnames(df)[stringr::str_detect(colnames(df), "value\\.")]
@@ -128,7 +132,27 @@ as_tdf.tdf_long <- function(df, value_name = NULL, names = NULL, disaggregation_
   }
 
   if(length(unique(df$meta.price_basis))!=1){
-    warning("Multiple price basis found! Conversion maybe unexpected!", call. = FALSE)
+    if(missing(add_price_basis_as_tag) && length(unique(df$meta.price_basis)) <=4){
+      cat("\nEnabling <add_price_basis_as_tag>. If you dont want that set add_price_basis_as_tag = FALSE.\n")
+      add_price_basis_as_tag <- TRUE
+    } else {
+      warning("Multiple price basis found! Conversion maybe unexpected!", call. = FALSE)
+    }
+  }
+
+  if(use_short_names){
+    if(!("meta.short_name" %in% colnames(df))) {
+      stop("Note: <meta.short_name> is required if use_short_names is set to TRUE.", call. = FALSE)
+    }
+    df$meta.name_orig <- df$meta.name
+    df$meta.name <- df$meta.short_name
+  }
+
+  if(missing(add_price_basis_as_tag)) add_price_basis_as_tag <- FALSE
+
+  if(add_price_basis_as_tag){
+    df$meta.name <- df$meta.name |> paste0("_",df$meta.price_basis)
+    df$meta.price_basis <-"unified"
   }
 
   df <- df |>
@@ -482,4 +506,52 @@ to_ts <- function(tdf_obj){
 #' @export
 as.ts.tdf <- function(x, ...) {
   to_ts(x)
+}
+
+
+#' Aggregate a `tdf` Object Temporally
+#'
+#' @description
+#' Aggregates a `tdf` object across time (temporal aggregation) by internally converting
+#' it to a `tdf_long` format, performing the aggregation, and converting it back.
+#'
+#' @details
+#' This function acts as a wrapper around \code{aggregate.tdf_long()}, explicitly enforcing
+#' \code{type = "temporal"}. It is used to aggregate a higher-frequency series to
+#' a lower frequency (e.g., monthly to quarterly or quarterly to yearly). The target
+#' frequency can be specified using \code{to_freq}; if omitted, the next lower
+#' frequency is chosen automatically.
+#'
+#' @param x A `tdf` object.
+#' @param to_freq Target frequency for temporal aggregation (e.g., `"quarter"`,
+#'   `"halfyear"` or `"year"`). If `NULL` (the default), the next lower frequency
+#'   is selected automatically.
+#' @param aggregate_function Function used to aggregate observations during temporal
+#'   aggregation. Defaults to [base::sum].
+#' @param on_incomplete_periods Logical. Determines how to handle lower-frequency periods
+#'   that lack a complete set of higher-frequency observations. Defaults to `FALSE`.
+#' @param silent Logical. If `TRUE`, suppresses informational messages during execution.
+#' @param ... Additional arguments passed to the underlying `aggregate_function`
+#'   (e.g., `na.rm = TRUE`) or to internal aggregation methods.
+#'
+#' @return
+#' A `tdf` object containing the temporally aggregated series.
+#'
+#' @export
+#' @method aggregate tdf
+#' @importFrom stats aggregate
+aggregate.tdf <- function(
+    x, to_freq = NULL,
+    aggregate_function = sum,
+    on_incomplete_periods = FALSE,
+    silent = FALSE, ...){
+  xl <- as_tdf_long(x)
+  ol <- aggregate.tdf_long(
+    xl,
+    type = "temporal",
+    to_freq = to_freq,
+    aggregate_function = aggregate_function,
+    on_incomplete_periods = on_incomplete_periods,
+    silent = silent, ...)
+  ol |> as_tdf()
 }

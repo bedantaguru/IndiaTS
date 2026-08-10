@@ -1,631 +1,465 @@
+
 # =============================================================================
-# Utility helpers (numerical safety)
+# METRIC FRAMEWORK
+# =============================================================================
+# Design:
+#   - Public API uses EXPLICIT boolean arguments for IDE autocomplete,
+#     transparent Roxygen documentation, and clean tracebacks.
+#   - Each metric is declared ONCE with metadata in `metric_registry`.
+#   - Repetitive metric math is abstracted into helper factories.
+#   - The dependency graph resolves order using a clean DFS `for` loop.
+#   - Computations are applied sequentially using a simple `for` loop.
+#   - Computationally expensive metric categories (e.g., "Seasonal") are
+#     excluded from `.compute_all` via `.avoid_during_compute_all`.
+#   - Load-time consistency checks guarantee signatures map to the registry.
 # =============================================================================
 
-#  TODO change from al ifelse to dplyr::if_else
+# ---- small numeric helpers -------------------------------------------------
 
 safe_divide <- function(num, den) {
-  # Sanitize the denominator to avoid division by zero
-  den_safe <- if_else(is.na(den) | den == 0, NA_real_, as.numeric(den))
-
+  den_safe <- dplyr::if_else(is.na(den) | den == 0, NA_real_, as.numeric(den))
   num / den_safe
 }
 
 safe_log_ratio <- function(num, den) {
   ratio <- safe_divide(num, den)
-
-  # Sanitize the ratio before logging to prevent warnings from log(<= 0)
-  ratio_safe <- if_else(is.na(ratio) | ratio <= 0, NA_real_, as.numeric(ratio))
-
+  ratio_safe <- dplyr::if_else(is.na(ratio) | ratio <= 0, NA_real_, as.numeric(ratio))
   log(ratio_safe)
 }
 
 safe_pct <- function(x) {
   s <- sum(x, na.rm = TRUE)
+  if (is.na(s) || s == 0) rep(NA_real_, length(x)) else (x / s) * 100
+}
 
-  # Use a standard 'if' for the scalar check to avoid if_else recycling errors
-  if (is.na(s) || s == 0) {
-    rep(NA_real_, length(x))
-  } else {
-    (x / s) * 100
+# ---- registry entry constructor --------------------------------------------
+
+new_metric <- function(label = "", description = "", category = "", output = "",
+                       depends = character(0), requires = NULL, compute_fn) {
+  stopifnot(is.function(compute_fn))
+  list(
+    label = label,
+    description = description,
+    category = category,
+    output = output,
+    depends = depends,
+    requires = requires,
+    compute_fn = compute_fn
+  )
+}
+
+# ---- metric compute factories ----------------------------------------------
+
+make_prev_level_metric <- function(out_col, ctx_join_name) {
+  function(dat, ctx) {
+    lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), value.level)
+    names(lookup)[names(lookup) == "value.level"] <- out_col
+    dat %>% dplyr::left_join(lookup, by = ctx[[ctx_join_name]])
+  }
+}
+
+make_rate_metric <- function(out_col, prev_col, is_log = FALSE) {
+  function(dat, ctx) {
+    if (is_log) {
+      dat[[out_col]] <- safe_log_ratio(dat$value.level, dat[[prev_col]]) * 100
+    } else {
+      dat[[out_col]] <- (safe_divide(dat$value.level, dat[[prev_col]]) - 1) * 100
+    }
+    dat
+  }
+}
+
+make_prev_rate_metric <- function(out_col, in_col) {
+  function(dat, ctx) {
+    lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), dplyr::all_of(in_col))
+    names(lookup)[names(lookup) == in_col] <- out_col
+    dat %>% dplyr::left_join(lookup, by = ctx$join_prev_period)
+  }
+}
+
+make_delta_metric <- function(out_col, curr_col, prev_col) {
+  function(dat, ctx) {
+    dat[[out_col]] <- dat[[curr_col]] - dat[[prev_col]]
+    dat
+  }
+}
+
+make_base_effect_metric <- function(out_col, in_col) {
+  function(dat, ctx) {
+    lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), dplyr::all_of(in_col))
+    names(lookup)[names(lookup) == in_col] <- out_col
+    lookup[[out_col]] <- -lookup[[out_col]]
+    dat %>% dplyr::left_join(lookup, by = ctx$join_prev_year)
+  }
+}
+
+make_share_prev_metric <- function(out_col, ctx_join_name) {
+  function(dat, ctx) {
+    lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), .value.share_pct)
+    names(lookup)[names(lookup) == ".value.share_pct"] <- out_col
+    dat %>% dplyr::left_join(lookup, by = ctx[[ctx_join_name]])
+  }
+}
+
+make_contribution_metric <- function(out_col, share_col, rate_col) {
+  function(dat, ctx) {
+    dat[[out_col]] <- (dat[[share_col]] * dat[[rate_col]]) / 100
+    dat
   }
 }
 
 # =============================================================================
-# compute_metrics_part
-# =============================================================================
-# Computes derived time-series metrics such as growth, momentum,
-# contributions, and shares from value.level.
-#
-# Only requested metrics are returned. Intermediate values are computed
-# internally but not exposed unless explicitly requested.
+# THE REGISTRY  -- Single source of truth for standard metrics
 # =============================================================================
 
-compute_metrics_part <- function(
-    dat,
-    level_prev_prd               = FALSE,
-    level_prev_year              = FALSE,
-    growth_rate                  = FALSE,
-    momentum                     = FALSE,
-    ln_growth_rate               = FALSE,
-    ln_momentum                  = FALSE,
-    base_effect                  = FALSE,
-    ln_base_effect               = FALSE,
-    growth_rate_prev_prd         = FALSE,
-    ln_growth_rate_prev_prd      = FALSE,
-    delta_growth_rate            = FALSE,
-    delta_ln_growth_rate         = FALSE,
-    level_parent                 = FALSE,
-    share_pct                    = FALSE,
-    share_prev_prd               = FALSE,
-    share_prev_year              = FALSE,
-    contribution_growth_rate     = FALSE,
-    contribution_momentum        = FALSE,
-    contribution_growth_rate_pct = FALSE,
-    contribution_momentum_pct    = FALSE,
-    annual_contribution          = FALSE,
-    .compute_all                 = FALSE
-) {
+metric_registry <- list(
 
-  # Enable all metrics if global flag is set
-  if (.compute_all) {
-    level_prev_prd               <- TRUE
-    level_prev_year              <- TRUE
-    growth_rate                  <- TRUE
-    momentum                     <- TRUE
-    ln_growth_rate               <- TRUE
-    ln_momentum                  <- TRUE
-    base_effect                  <- TRUE
-    ln_base_effect               <- TRUE
-    growth_rate_prev_prd         <- TRUE
-    ln_growth_rate_prev_prd      <- TRUE
-    delta_growth_rate            <- TRUE
-    delta_ln_growth_rate         <- TRUE
-    level_parent                 <- TRUE
-    share_pct                    <- TRUE
-    share_prev_prd               <- TRUE
-    share_prev_year              <- TRUE
-    contribution_growth_rate     <- TRUE
-    contribution_momentum        <- TRUE
-    contribution_growth_rate_pct <- TRUE
-    contribution_momentum_pct    <- TRUE
-    annual_contribution          <- TRUE
+  level_prev_prd = new_metric(
+    label = "Previous Period Level", category = "Level", output = ".value.level_prev_prd",
+    compute_fn = make_prev_level_metric(".value.level_prev_prd", "join_prev_period")
+  ),
+
+  level_prev_year = new_metric(
+    label = "Previous Year Level", category = "Level", output = ".value.level_prev_year",
+    compute_fn = make_prev_level_metric(".value.level_prev_year", "join_prev_year")
+  ),
+
+  growth_rate = new_metric(
+    label = "Growth Rate (YoY)", category = "Growth", output = ".value.growth_rate", depends = "level_prev_year",
+    compute_fn = make_rate_metric(".value.growth_rate", ".value.level_prev_year", is_log = FALSE)
+  ),
+
+  momentum = new_metric(
+    label = "Momentum (PoP)", category = "Growth", output = ".value.momentum", depends = "level_prev_prd",
+    compute_fn = make_rate_metric(".value.momentum", ".value.level_prev_prd", is_log = FALSE)
+  ),
+
+  ln_growth_rate = new_metric(
+    label = "Log Growth Rate (YoY)", category = "Growth", output = ".value.ln_growth_rate", depends = "level_prev_year",
+    compute_fn = make_rate_metric(".value.ln_growth_rate", ".value.level_prev_year", is_log = TRUE)
+  ),
+
+  ln_momentum = new_metric(
+    label = "Log Momentum (PoP)", category = "Growth", output = ".value.ln_momentum", depends = "level_prev_prd",
+    compute_fn = make_rate_metric(".value.ln_momentum", ".value.level_prev_prd", is_log = TRUE)
+  ),
+
+  base_effect = new_metric(
+    label = "Base Effect", category = "Decomposition", output = ".value.base_effect", depends = "ln_momentum",
+    compute_fn = make_base_effect_metric(".value.base_effect", ".value.ln_momentum")
+  ),
+
+  ln_base_effect = new_metric(
+    label = "Log Base Effect", category = "Decomposition", output = ".value.ln_base_effect", depends = "ln_momentum",
+    compute_fn = make_base_effect_metric(".value.ln_base_effect", ".value.ln_momentum")
+  ),
+
+  growth_rate_prev_prd = new_metric(
+    label = "Previous Period Growth", category = "Growth", output = ".value.growth_rate_prev_prd", depends = "growth_rate",
+    compute_fn = make_prev_rate_metric(".value.growth_rate_prev_prd", ".value.growth_rate")
+  ),
+
+  ln_growth_rate_prev_prd = new_metric(
+    label = "Previous Period Log Growth", category = "Growth", output = ".value.ln_growth_rate_prev_prd", depends = "ln_growth_rate",
+    compute_fn = make_prev_rate_metric(".value.ln_growth_rate_prev_prd", ".value.ln_growth_rate")
+  ),
+
+  delta_growth_rate = new_metric(
+    label = "Delta Growth Rate", category = "Change", output = ".value.delta_growth_rate", depends = c("growth_rate", "growth_rate_prev_prd"),
+    compute_fn = make_delta_metric(".value.delta_growth_rate", ".value.growth_rate", ".value.growth_rate_prev_prd")
+  ),
+
+  delta_ln_growth_rate = new_metric(
+    label = "Delta Log Growth", category = "Change", output = ".value.delta_ln_growth_rate", depends = c("ln_growth_rate", "ln_growth_rate_prev_prd"),
+    compute_fn = make_delta_metric(".value.delta_ln_growth_rate", ".value.ln_growth_rate", ".value.ln_growth_rate_prev_prd")
+  ),
+
+  level_parent = new_metric(
+    label = "Parent Level", category = "Structure", output = ".value.level_parent", requires = "parent",
+    compute_fn = function(dat, ctx) {
+      dat_parent <- dat %>%
+        dplyr::filter(
+          meta.name == meta.parent,
+          meta.disaggregation_group == meta.parent_disaggregation_group
+        ) %>%
+        dplyr::select(
+          time, meta.release_tag, meta.price_basis,
+          meta.parent, meta.parent_disaggregation_group,
+          .value.level_parent = value.level
+        )
+      dat %>% dplyr::left_join(
+        dat_parent,
+        by = c(
+          "time", "meta.release_tag", "meta.price_basis",
+          "meta.parent", "meta.parent_disaggregation_group"
+        )
+      )
+    }
+  ),
+
+  share_pct = new_metric(
+    label = "Share (%)", category = "Structure", output = ".value.share_pct", depends = "level_parent", requires = "parent",
+    compute_fn = function(dat, ctx) {
+      dat$.value.share_pct <- safe_divide(dat$value.level, dat$.value.level_parent) * 100
+      dat
+    }
+  ),
+
+  share_prev_prd = new_metric(
+    label = "Previous Period Share", category = "Structure", output = ".value.share_prev_prd", depends = "share_pct", requires = "parent",
+    compute_fn = make_share_prev_metric(".value.share_prev_prd", "join_prev_period")
+  ),
+
+  share_prev_year = new_metric(
+    label = "Previous Year Share", category = "Structure", output = ".value.share_prev_year", depends = "share_pct", requires = "parent",
+    compute_fn = make_share_prev_metric(".value.share_prev_year", "join_prev_year")
+  ),
+
+  contribution_growth_rate = new_metric(
+    label = "Growth Contribution", category = "Contribution", output = ".value.contribution_growth_rate", depends = c("share_prev_year", "growth_rate"), requires = "parent",
+    compute_fn = make_contribution_metric(".value.contribution_growth_rate", ".value.share_prev_year", ".value.growth_rate")
+  ),
+
+  contribution_momentum = new_metric(
+    label = "Momentum Contribution", category = "Contribution", output = ".value.contribution_momentum", depends = c("share_prev_prd", "momentum"), requires = "parent",
+    compute_fn = make_contribution_metric(".value.contribution_momentum", ".value.share_prev_prd", ".value.momentum")
+  ),
+
+  contribution_growth_rate_pct = new_metric(
+    label = "Relative Growth Contribution (%)", category = "Contribution", output = ".value.contribution_growth_rate_pct", depends = "contribution_growth_rate", requires = "parent",
+    compute_fn = function(dat, ctx) {
+      group_cols <- c("time", ctx$id_cols, "meta.parent", "meta.parent_disaggregation_group")
+      dat %>%
+        dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) %>%
+        dplyr::mutate(.value.contribution_growth_rate_pct = safe_pct(.value.contribution_growth_rate)) %>%
+        dplyr::ungroup()
+    }
+  ),
+
+  contribution_momentum_pct = new_metric(
+    label = "Relative Momentum Contribution (%)", category = "Contribution", output = ".value.contribution_momentum_pct", depends = "contribution_momentum", requires = "parent",
+    compute_fn = function(dat, ctx) {
+      group_cols <- c("time", ctx$id_cols, "meta.parent", "meta.parent_disaggregation_group")
+      dat %>%
+        dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) %>%
+        dplyr::mutate(.value.contribution_momentum_pct = safe_pct(.value.contribution_momentum)) %>%
+        dplyr::ungroup()
+    }
+  ),
+
+  annual_contribution = new_metric(
+    label = "Annual Contribution", category = "Structure", output = ".value.annual_contribution",
+    compute_fn = function(dat, ctx) {
+      group_cols <- c(".time_year", ctx$id_cols)
+      dat %>%
+        dplyr::mutate(.time_year = fiscal_year(time)) %>%
+        dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) %>%
+        dplyr::mutate(.value.annual_contribution = safe_divide(value.level, sum(value.level, na.rm = TRUE)) * 100) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(-.time_year)
+    }
+  ),
+
+  SA = new_metric(
+    label = "Seasonal Adjustment", category = "Seasonal", output = ".value.SA",
+    compute_fn = function(dat, ctx) {
+      fq_this <- frequency(dat$time, singular = TRUE)
+      if (!fq_this %in% c("quarter", "month")) {
+        warning(sprintf(
+          "Seasonal adjustment-related measures are supported only for quarterly or monthly data (received frequency: '%s'). They will be omitted.",
+          fq_this
+        ), call. = FALSE)
+        dat$.value.SA <- NA_real_
+        return(dat)
+      }
+      dat_td_lst <- split(
+        dat,
+        list(dat$meta.release_tag, dat$meta.price_basis, dat$meta.name, dat$meta.disaggregation_group),
+        drop = TRUE
+      )
+      for_a_node <- function(nd) {
+        ndt <- as_tdf(nd)
+        nd_sa <- tryCatch(
+          suppressMessages(suppressWarnings(auto_seas(ndt))),
+          error = function(e) NULL
+        )
+        if (is.null(nd_sa) || NROW(nd_sa) != NROW(nd)) {
+          nd$.value.SA <- NA_real_
+        } else {
+          colnames(nd_sa) <- c("time", ".value.SA")
+          nd <- dplyr::left_join(nd, nd_sa, by = "time")
+        }
+        nd
+      }
+      dat_re <- purrr::map(dat_td_lst, for_a_node, .progress = interactive()) |>
+        purrr::list_rbind()
+      if (!is_valid_derived_tdf_long(dat, dat_re)) {
+        stop("Unexpected Error Found!", call. = FALSE)
+      }
+      dat_re
+    }
+  ),
+
+  seasonally_adjusted = new_metric(
+    label = "Seasonally Adjusted Level", category = "Seasonal", output = ".value.seasonally_adjusted", depends = "SA",
+    compute_fn = function(dat, ctx) {
+      dat$.value.seasonally_adjusted <- dat$.value.SA
+      dat
+    }
+  ),
+
+  # Non-recursive: joins .value.SA against itself at the previous period directly.
+  SAAR = new_metric(
+    label = "SAAR", category = "Seasonal", output = ".value.SAAR", depends = "SA",
+    compute_fn = function(dat, ctx) {
+      fq_this <- frequency(dat$time, singular = TRUE)
+      if (!fq_this %in% c("quarter", "month")) {
+        dat$.value.SAAR <- NA_real_
+        return(dat)
+      }
+
+      lookup <- dat %>%
+        dplyr::select(time, dplyr::all_of(ctx$id_cols), .value.SA) %>%
+        dplyr::rename(.value.SA_prev = .value.SA)
+
+      dat <- dat %>% dplyr::left_join(lookup, by = ctx$join_prev_period)
+
+      fct <- if (fq_this == "quarter") 4 else 12
+      dat$.value.SAAR <- ((dat$.value.SA / dat$.value.SA_prev)^fct - 1) * 100
+
+      dat %>% dplyr::select(-.value.SA_prev)
+    }
+  )
+)
+
+# =============================================================================
+# DEPENDENCY RESOLUTION (Clean DFS pure-functional approach)
+# =============================================================================
+
+resolve_metric_order <- function(requested, registry) {
+  unknown <- setdiff(requested, names(registry))
+  if (length(unknown) > 0) {
+    stop("Unknown metric(s): ", paste(unknown, collapse = ", "), call. = FALSE)
   }
 
-  # Identify requested outputs
-  requested_cols <- c(
-    if (level_prev_prd)               "value.level_prev_prd",
-    if (level_prev_year)              "value.level_prev_year",
-    if (growth_rate)                  "value.growth_rate",
-    if (momentum)                     "value.momentum",
-    if (ln_growth_rate)               "value.ln_growth_rate",
-    if (ln_momentum)                  "value.ln_momentum",
-    if (base_effect)                  "value.base_effect",
-    if (ln_base_effect)               "value.ln_base_effect",
-    if (growth_rate_prev_prd)         "value.growth_rate_prev_prd",
-    if (ln_growth_rate_prev_prd)      "value.ln_growth_rate_prev_prd",
-    if (delta_growth_rate)            "value.delta_growth_rate",
-    if (delta_ln_growth_rate)         "value.delta_ln_growth_rate",
-    if (level_parent)                 "value.level_parent",
-    if (share_pct)                    "value.share_pct",
-    if (share_prev_prd)               "value.share_prev_prd",
-    if (share_prev_year)              "value.share_prev_year",
-    if (contribution_growth_rate)     "value.contribution_growth_rate",
-    if (contribution_momentum)        "value.contribution_momentum",
-    if (contribution_growth_rate_pct) "value.contribution_growth_rate_pct",
-    if (contribution_momentum_pct)    "value.contribution_momentum_pct",
-    if (annual_contribution)          "value.annual_contribution"
+  initial_state <- list(
+    order = character(0),
+    visiting = character(0)
   )
 
-  if (length(requested_cols) == 0) {
+  visit <- function(m, state) {
+    if (m %in% state$order) return(state)
+    if (m %in% state$visiting) stop("Circular dependency detected at metric: ", m, call. = FALSE)
+
+    state$visiting <- c(state$visiting, m)
+
+    for (dep in registry[[m]]$depends) {
+      state <- visit(dep, state)
+    }
+
+    state$visiting <- setdiff(state$visiting, m)
+    state$order <- c(state$order, m)
+    return(state)
+  }
+
+  current_state <- initial_state
+  for (req in requested) {
+    current_state <- visit(req, current_state)
+  }
+
+  current_state$order
+}
+
+# =============================================================================
+# ENGINE  -- executes compute_fn(), renames, and cleans up
+# =============================================================================
+
+compute_metrics_engine <- function(dat, requested, registry) {
+
+  if (length(requested) == 0) {
     message("compute_metrics: no output requested. Returning data unchanged.")
     return(dat)
   }
-
   if (!"value.level" %in% colnames(dat)) {
     stop("compute_metrics: value.level column missing.", call. = FALSE)
   }
 
-  # Drop requested columns if they already exist to prevent rename collisions.
-  # Also clean up any stray dot-prefixed temporary columns from previous runs.
-  dat <- dat %>% select(
+  requested_cols <- paste0("value.", requested)
+
+  dat <- dat %>% dplyr::select(
     -dplyr::any_of(requested_cols),
     -dplyr::starts_with(".time_"),
     -dplyr::starts_with(".value.")
   )
 
   id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
-
   missing_id_cols <- setdiff(id_cols, colnames(dat))
   if (length(missing_id_cols) > 0) {
     dat[missing_id_cols] <- "dummy"
-    if(dat$meta.release_tag[1]=="dummy" && length(unique(dat$meta.release_tag))==1){
+    if (dat$meta.release_tag[1] == "dummy" && length(unique(dat$meta.release_tag)) == 1) {
       dat$meta.release_tag <- "#main"
     }
-
-    # Check if dummy creation is meaningful
-    chk_dummy_cols_creation <- dat |>
-      dplyr::group_by(dplyr::across(all_of(unique(c("time", id_cols))))) |>
+    chk <- dat |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(unique(c("time", id_cols))))) |>
       cols_causing_group_variation()
-
-    if(length(chk_dummy_cols_creation)>0){
+    if (length(chk) > 0) {
       stop("Failed to create dummy ID columns. Check if required `meta.*` columns were accidentally dropped.", call. = FALSE)
     }
   }
-
-  join_keys_same <- setNames(id_cols, id_cols)
 
   has_parent <- all(c("meta.parent", "meta.parent_disaggregation_group") %in% colnames(dat))
+  join_keys_same <- setNames(id_cols, id_cols)
 
-  # Drop parent-dependent metrics if parent info is missing
-  parent_metrics <- c(
-    "value.level_parent",
-    "value.share_pct",
-    "value.share_prev_prd",
-    "value.share_prev_year",
-    "value.contribution_growth_rate",
-    "value.contribution_momentum",
-    "value.contribution_growth_rate_pct",
-    "value.contribution_momentum_pct"
+  ctx <- list(
+    id_cols = id_cols,
+    join_keys_same = join_keys_same,
+    join_prev_period = c(setNames("time", ".time_prev_period"), join_keys_same),
+    join_prev_year = c(setNames("time", ".time_prev_year"), join_keys_same),
+    has_parent = has_parent,
+    missing_id_cols = missing_id_cols
   )
 
-  parent_dependent <- intersect(requested_cols, parent_metrics)
-
-  if (length(parent_dependent) > 0 && !has_parent) {
-    warning(
-      "compute_metrics: meta.parent / meta.parent_disaggregation_group not found. ",
-      "The following requested columns will be dropped: ", paste(parent_dependent, collapse = ", "),
-      call. = FALSE
-    )
-    requested_cols <- setdiff(requested_cols, parent_dependent)
-    level_parent <- share_pct <- share_prev_prd <- share_prev_year <- FALSE
-    contribution_growth_rate <- contribution_momentum <- FALSE
-    contribution_growth_rate_pct <- contribution_momentum_pct <- FALSE
-  }
-
-  # Determine dependencies
-  need_level_prev_prd        <- level_prev_prd || momentum || ln_momentum || contribution_momentum || contribution_momentum_pct || base_effect || ln_base_effect
-  need_level_prev_year       <- level_prev_year || growth_rate || ln_growth_rate || contribution_growth_rate || contribution_growth_rate_pct || delta_growth_rate || delta_ln_growth_rate
-
-  need_growth_rate           <- growth_rate || growth_rate_prev_prd || delta_growth_rate || contribution_growth_rate || contribution_growth_rate_pct
-  need_ln_growth_rate        <- ln_growth_rate || ln_growth_rate_prev_prd || delta_ln_growth_rate
-  need_momentum              <- momentum || contribution_momentum || contribution_momentum_pct
-  need_ln_momentum           <- ln_momentum || base_effect || ln_base_effect
-
-  need_share_pct             <- share_pct || share_prev_prd || share_prev_year || contribution_growth_rate || contribution_momentum || contribution_growth_rate_pct || contribution_momentum_pct
-  need_share_prev_prd        <- share_prev_prd || contribution_momentum || contribution_momentum_pct
-  need_share_prev_year       <- share_prev_year || contribution_growth_rate || contribution_growth_rate_pct
-
-  need_growth_rate_prev_prd  <- growth_rate_prev_prd || delta_growth_rate
-  need_ln_growth_prev_prd    <- ln_growth_rate_prev_prd || delta_ln_growth_rate
-
-  # ---- Time references ----
-  dat <- dat %>%
-    mutate(
-      .time_prev_period = previous_period(time),
-      .time_prev_year   = previous_year(time)
-    )
-
-  # ---- Previous values ----
-  if (need_level_prev_prd || need_level_prev_year) {
-    lookup <- dat %>% select(time, dplyr::all_of(id_cols), value.level)
-
-    if (need_level_prev_prd) {
-      dat <- dat %>% left_join(lookup %>% rename(.value.level_prev_prd = value.level), by = c(".time_prev_period" = "time", join_keys_same))
-    }
-    if (need_level_prev_year) {
-      dat <- dat %>% left_join(lookup %>% rename(.value.level_prev_year = value.level), by = c(".time_prev_year" = "time", join_keys_same))
-    }
-  }
-
-  # ---- Growth and momentum ----
-  if (need_growth_rate || need_momentum || need_ln_growth_rate || need_ln_momentum) {
-    dat <- dat %>%
-      mutate(
-        .value.growth_rate    = if (need_growth_rate)    (safe_divide(value.level, .value.level_prev_year) - 1) * 100 else NA_real_,
-        .value.momentum       = if (need_momentum)       (safe_divide(value.level, .value.level_prev_prd) - 1) * 100  else NA_real_,
-        .value.ln_growth_rate = if (need_ln_growth_rate) safe_log_ratio(value.level, .value.level_prev_year) * 100    else NA_real_,
-        .value.ln_momentum    = if (need_ln_momentum)    safe_log_ratio(value.level, .value.level_prev_prd) * 100     else NA_real_
+  if (!ctx$has_parent) {
+    parent_needed <- requested[vapply(requested, function(m) identical(registry[[m]]$requires, "parent"), logical(1))]
+    if (length(parent_needed) > 0) {
+      warning(
+        "compute_metrics: meta.parent / meta.parent_disaggregation_group not found. ",
+        "The following requested metrics will be dropped: ", paste(parent_needed, collapse = ", "),
+        call. = FALSE
       )
-  }
-
-  # ---- Base effects ----
-  if (base_effect || ln_base_effect) {
-    dat <- dat %>%
-      left_join(
-        dat %>%
-          select(time, dplyr::all_of(id_cols), .value.ln_momentum) %>%
-          mutate(
-            .value.base_effect    = -.value.ln_momentum,
-            .value.ln_base_effect = -.value.ln_momentum
-          ) %>%
-          select(-.value.ln_momentum),
-        by = c(".time_prev_year" = "time", join_keys_same)
-      )
-  }
-
-  # ---- Delta growth ----
-  if (need_growth_rate_prev_prd || need_ln_growth_prev_prd) {
-    dat <- dat %>%
-      left_join(
-        dat %>%
-          select(time, dplyr::all_of(id_cols),
-                 .value.growth_rate_prev_prd    = if(need_growth_rate_prev_prd) ".value.growth_rate" else NULL,
-                 .value.ln_growth_rate_prev_prd = if(need_ln_growth_prev_prd) ".value.ln_growth_rate" else NULL),
-        by = c(".time_prev_period" = "time", join_keys_same)
-      ) %>%
-      mutate(
-        .value.delta_growth_rate    = if (delta_growth_rate)    .value.growth_rate - .value.growth_rate_prev_prd else NA_real_,
-        .value.delta_ln_growth_rate = if (delta_ln_growth_rate) .value.ln_growth_rate - .value.ln_growth_rate_prev_prd else NA_real_
-      )
-  }
-
-  # ---- Shares and contributions ----
-  if (need_share_pct) {
-
-    dat_parent <- dat %>%
-      filter(meta.name == meta.parent,
-             meta.disaggregation_group == meta.parent_disaggregation_group) %>%
-      select(time, meta.release_tag, meta.price_basis,
-             meta.parent, meta.parent_disaggregation_group,
-             .value.level_parent = value.level)
-
-    dat <- dat %>%
-      left_join(dat_parent,
-                by = c("time", "meta.release_tag", "meta.price_basis",
-                       "meta.parent", "meta.parent_disaggregation_group")) %>%
-      mutate(.value.share_pct = safe_divide(value.level, .value.level_parent) * 100)
-
-    if (need_share_prev_prd) {
-      dat <- dat %>% left_join(dat %>% select(time, dplyr::all_of(id_cols), .value.share_prev_prd = .value.share_pct),
-                               by = c(".time_prev_period" = "time", join_keys_same))
-    }
-
-    if (need_share_prev_year) {
-      dat <- dat %>% left_join(dat %>% select(time, dplyr::all_of(id_cols), .value.share_prev_year = .value.share_pct),
-                               by = c(".time_prev_year" = "time", join_keys_same))
-    }
-
-    if (contribution_growth_rate || contribution_momentum || contribution_growth_rate_pct || contribution_momentum_pct) {
-      dat <- dat %>%
-        mutate(
-          .value.contribution_growth_rate = if (contribution_growth_rate || contribution_growth_rate_pct) .value.share_prev_year * .value.growth_rate / 100 else NA_real_,
-          .value.contribution_momentum    = if (contribution_momentum || contribution_momentum_pct) .value.share_prev_prd  * .value.momentum    / 100 else NA_real_
-        )
-    }
-
-    if (contribution_growth_rate_pct || contribution_momentum_pct) {
-      dat <- dat %>%
-        group_by(time, meta.release_tag, meta.price_basis,
-                 meta.disaggregation_group, meta.parent, meta.parent_disaggregation_group) %>%
-        mutate(
-          .value.contribution_growth_rate_pct = if (contribution_growth_rate_pct) safe_pct(.value.contribution_growth_rate) else NA_real_,
-          .value.contribution_momentum_pct    = if (contribution_momentum_pct) safe_pct(.value.contribution_momentum) else NA_real_
-        ) %>%
-        ungroup()
+      requested <- setdiff(requested, parent_needed)
+      requested_cols <- paste0("value.", requested)
     }
   }
 
-  # ---- Annual contribution ----
-  if (annual_contribution) {
-    dat <- dat %>%
-      mutate(.time_year = fiscal_year(time)) %>%
-      group_by(.time_year, meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) %>%
-      mutate(.value.annual_contribution = safe_divide(value.level, sum(value.level, na.rm = TRUE)) * 100) %>%
-      ungroup() %>%
-      select(-.time_year)
-  }
+  if (length(requested) == 0) return(dat)
 
-  # ---- Rename outputs ----
-  rename_map <- setNames(paste0(".", requested_cols), requested_cols)
-  rename_map <- rename_map[paste0(".", requested_cols) %in% colnames(dat)]
+  order <- resolve_metric_order(requested, registry)
 
-  dat <- dat %>% rename(dplyr::all_of(rename_map))
-
-  # ---- Final cleanup ----
-  dat %>% select(
-    -dplyr::starts_with(".time_"),
-    -dplyr::starts_with(".value."),
-    -dplyr::any_of(missing_id_cols)
-  )
-}
-
-# =============================================================================
-# compute_deflator_metrics
-# =============================================================================
-# Computes deflator and deflator inflation from real and nominal series.
-# Returns NULL if matching pairs are not found.
-# =============================================================================
-
-compute_deflator_metrics <- function(
-    dat,
-    deflator           = FALSE,
-    deflator_inflation = FALSE,
-    .compute_all       = FALSE,
-    .blank_for_real_nominal_missing = FALSE
-) {
-
-  if (.compute_all) {
-    deflator <- deflator_inflation <- TRUE
-  }
-
-  requested_cols <- c(
-    if (deflator)           "value.deflator",
-    if (deflator_inflation) "value.deflator_inflation"
+  dat <- dat %>% dplyr::mutate(
+    .time_prev_period = previous_period(time),
+    .time_prev_year   = previous_year(time)
   )
 
-  if (length(requested_cols) == 0) return(dat)
-
-  # Drop existing requested columns to prevent collisions
-  dat <- dat %>% select(
-    -dplyr::any_of(requested_cols),
-    -dplyr::starts_with(".time_"),
-    -dplyr::starts_with(".value.")
-  )
-
-  id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
-
-  missing_id_cols <- setdiff(id_cols, colnames(dat))
-  if (length(missing_id_cols) > 0) {
-    dat[missing_id_cols] <- "dummy"
-    if(dat$meta.release_tag[1]=="dummy" && length(unique(dat$meta.release_tag))==1){
-      dat$meta.release_tag <- "#main"
-    }
-
-    # Check if dummy creation is meaningful
-    chk_dummy_cols_creation <- dat |>
-      dplyr::group_by(dplyr::across(all_of(unique(c("time", id_cols))))) |>
-      cols_causing_group_variation()
-
-    if(length(chk_dummy_cols_creation)>0){
-      stop("Failed to create dummy ID columns. Check if required `meta.*` columns were accidentally dropped.", call. = FALSE)
-    }
-  }
-
-  dat_prep <- dat %>%
-    mutate(
-      meta.price_basis = tolower(meta.price_basis),
-      .is_real         = str_detect(meta.price_basis, "real"),
-      .is_nominal      = str_detect(meta.price_basis, "nominal"),
-      meta.price_basis = str_trim(str_remove(meta.price_basis, "real|nominal"))
-    )
-
-  valid <- any(dat_prep$.is_real, na.rm = TRUE) && any(dat_prep$.is_nominal, na.rm = TRUE)
-
-  if (!valid) {
-    if(.blank_for_real_nominal_missing) return(NULL)
-    stop("Not possible to calculate deflator and related measures! (real nominal both needed)", call. = FALSE)
-  }
-
-  join_cols <- c("time", "meta.name", "meta.disaggregation_group",
-                 "meta.release_tag", "meta.price_basis")
-
-  dat_defl <- dat_prep %>%
-    filter(.is_real) %>%
-    inner_join(
-      dat_prep %>% filter(.is_nominal),
-      by = join_cols,
-      suffix = c("_real", "_nominal")
-    ) %>%
-    mutate(.value.deflator = safe_divide(value.level_nominal, value.level_real) * 100)
-
-  if (nrow(dat_defl) == 0) return(NULL)
-
-  if (deflator_inflation) {
-    id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
-    join_keys_same <- setNames(id_cols, id_cols)
-
-    dat_defl <- dat_defl %>%
-      mutate(.time_prev_year = previous_year(time)) %>%
-      left_join(
-        dat_defl %>% select(time, dplyr::all_of(id_cols), .value.deflator_prev_year = .value.deflator),
-        by = c(".time_prev_year" = "time", join_keys_same)
-      ) %>%
-      mutate(
-        .value.deflator_inflation =
-          (safe_divide(.value.deflator, .value.deflator_prev_year) - 1) * 100
-      ) %>%
-      select(-.time_prev_year, -.value.deflator_prev_year)
+  # Sequential execution
+  for (m in order) {
+    dat <- registry[[m]]$compute_fn(dat, ctx)
   }
 
   rename_map <- setNames(paste0(".", requested_cols), requested_cols)
-  rename_map <- rename_map[paste0(".", requested_cols) %in% colnames(dat_defl)]
+  rename_map <- rename_map[paste0(".", requested_cols) %in% colnames(dat)]
+  dat <- dat %>% dplyr::rename(dplyr::all_of(rename_map))
 
-  dat_defl <- dat_defl %>%
-    rename(dplyr::all_of(rename_map)) %>%
-    select(dplyr::all_of(c(join_cols, intersect(requested_cols, colnames(.)))))
-
-  # ---- Final cleanup ----
-  dat_defl %>% select(
+  dat %>% dplyr::select(
     -dplyr::starts_with(".time_"),
     -dplyr::starts_with(".value."),
-    -dplyr::any_of(missing_id_cols)
+    -dplyr::any_of(ctx$missing_id_cols)
   )
 }
 
 # =============================================================================
-# compute_metrics (Wrapper function)
+# EXPLICIT PUBLIC SIGNATURES
 # =============================================================================
-# Acts as a unified entry point, routing requests to `compute_metrics_part`
-# or `compute_deflator_metrics` depending on the parameters provided.
-# =============================================================================
-
-
-#' @export
-compute_metrics.tdf <- function(
-    dat,
-    level_prev_prd               = FALSE,
-    level_prev_year              = FALSE,
-    growth_rate                  = FALSE,
-    momentum                     = FALSE,
-    ln_growth_rate               = FALSE,
-    ln_momentum                  = FALSE,
-    base_effect                  = FALSE,
-    ln_base_effect               = FALSE,
-    growth_rate_prev_prd         = FALSE,
-    ln_growth_rate_prev_prd      = FALSE,
-    delta_growth_rate            = FALSE,
-    delta_ln_growth_rate         = FALSE,
-    level_parent                 = FALSE,
-    share_pct                    = FALSE,
-    share_prev_prd               = FALSE,
-    share_prev_year              = FALSE,
-    contribution_growth_rate     = FALSE,
-    contribution_momentum        = FALSE,
-    contribution_growth_rate_pct = FALSE,
-    contribution_momentum_pct    = FALSE,
-    annual_contribution          = FALSE
-) {
-
-  all_metrics_chk <- c(
-    level_prev_prd = level_prev_prd,
-    level_prev_year = level_prev_year,
-    growth_rate = growth_rate,
-    momentum = momentum,
-    ln_growth_rate = ln_growth_rate,
-    ln_momentum = ln_momentum,
-    base_effect = base_effect,
-    ln_base_effect = ln_base_effect,
-    growth_rate_prev_prd = growth_rate_prev_prd,
-    ln_growth_rate_prev_prd = ln_growth_rate_prev_prd,
-    delta_growth_rate = delta_growth_rate,
-    delta_ln_growth_rate = delta_ln_growth_rate,
-    level_parent = level_parent,
-    share_pct = share_pct,
-    share_prev_prd = share_prev_prd,
-    share_prev_year = share_prev_year,
-    contribution_growth_rate = contribution_growth_rate,
-    contribution_momentum = contribution_momentum,
-    contribution_growth_rate_pct = contribution_growth_rate_pct,
-    contribution_momentum_pct = contribution_momentum_pct,
-    annual_contribution = annual_contribution
-  )
-
-  # Check if more than one is TRUE
-  if (sum(all_metrics_chk, na.rm = TRUE) > 1) {
-    stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE.", call. = FALSE)
-  }
-
-  if(sum(all_metrics_chk, na.rm = TRUE) == 0){
-    return(dat)
-  }
-
-  dl <- as_tdf_long(dat)
-
-  the_requested_measure <- names(which(all_metrics_chk))[1]
-
-  dl2 <- compute_metrics.tdf_long(
-    dl,
-    level_prev_prd = level_prev_prd,
-    level_prev_year = level_prev_year,
-    growth_rate = growth_rate,
-    momentum = momentum,
-    ln_growth_rate = ln_growth_rate,
-    ln_momentum = ln_momentum,
-    base_effect = base_effect,
-    ln_base_effect = ln_base_effect,
-    growth_rate_prev_prd = growth_rate_prev_prd,
-    ln_growth_rate_prev_prd = ln_growth_rate_prev_prd,
-    delta_growth_rate = delta_growth_rate,
-    delta_ln_growth_rate = delta_ln_growth_rate,
-    level_parent = level_parent,
-    share_pct = share_pct,
-    share_prev_prd = share_prev_prd,
-    share_prev_year = share_prev_year,
-    contribution_growth_rate = contribution_growth_rate,
-    contribution_momentum = contribution_momentum,
-    contribution_growth_rate_pct = contribution_growth_rate_pct,
-    contribution_momentum_pct = contribution_momentum_pct,
-    annual_contribution = annual_contribution)
-
-  d2 <- dl2 |> as_tdf(value_name = the_requested_measure)
-
-  stats::na.omit(d2)
-
-}
-
-
-#' @export
-compute_metrics.tdf_long <- function(
-    dat,
-    level_prev_prd               = FALSE,
-    level_prev_year              = FALSE,
-    growth_rate                  = FALSE,
-    momentum                     = FALSE,
-    ln_growth_rate               = FALSE,
-    ln_momentum                  = FALSE,
-    base_effect                  = FALSE,
-    ln_base_effect               = FALSE,
-    growth_rate_prev_prd         = FALSE,
-    ln_growth_rate_prev_prd      = FALSE,
-    delta_growth_rate            = FALSE,
-    delta_ln_growth_rate         = FALSE,
-    level_parent                 = FALSE,
-    share_pct                    = FALSE,
-    share_prev_prd               = FALSE,
-    share_prev_year              = FALSE,
-    contribution_growth_rate     = FALSE,
-    contribution_momentum        = FALSE,
-    contribution_growth_rate_pct = FALSE,
-    contribution_momentum_pct    = FALSE,
-    annual_contribution          = FALSE,
-    deflator                     = FALSE,
-    deflator_inflation           = FALSE,
-    .compute_all                 = FALSE
-) {
-
-  has_standard <- any(c(
-    level_prev_prd, level_prev_year, growth_rate, momentum, ln_growth_rate,
-    ln_momentum, base_effect, ln_base_effect, growth_rate_prev_prd,
-    ln_growth_rate_prev_prd, delta_growth_rate, delta_ln_growth_rate,
-    level_parent, share_pct, share_prev_prd, share_prev_year,
-    contribution_growth_rate, contribution_momentum, contribution_growth_rate_pct,
-    contribution_momentum_pct, annual_contribution
-  ))
-
-  has_deflator <- any(c(deflator, deflator_inflation))
-
-  if (has_standard && has_deflator) {
-    stop("Cannot compute standard metrics and deflator metrics simultaneously. Deflator metrics require matching real and nominal pairs, while standard metrics do not. Please calculate them in separate calls.", call. = FALSE)
-  }
-
-  if (has_deflator) {
-    return(compute_deflator_metrics(
-      dat                = dat,
-      deflator           = deflator,
-      deflator_inflation = deflator_inflation,
-      .compute_all       = .compute_all
-    ))
-  }
-
-  # Default fallback routes to compute_metrics_part
-  return(compute_metrics_part(
-    dat                          = dat,
-    level_prev_prd               = level_prev_prd,
-    level_prev_year              = level_prev_year,
-    growth_rate                  = growth_rate,
-    momentum                     = momentum,
-    ln_growth_rate               = ln_growth_rate,
-    ln_momentum                  = ln_momentum,
-    base_effect                  = base_effect,
-    ln_base_effect               = ln_base_effect,
-    growth_rate_prev_prd         = growth_rate_prev_prd,
-    ln_growth_rate_prev_prd      = ln_growth_rate_prev_prd,
-    delta_growth_rate            = delta_growth_rate,
-    delta_ln_growth_rate         = delta_ln_growth_rate,
-    level_parent                 = level_parent,
-    share_pct                    = share_pct,
-    share_prev_prd               = share_prev_prd,
-    share_prev_year              = share_prev_year,
-    contribution_growth_rate     = contribution_growth_rate,
-    contribution_momentum        = contribution_momentum,
-    contribution_growth_rate_pct = contribution_growth_rate_pct,
-    contribution_momentum_pct    = contribution_momentum_pct,
-    annual_contribution          = annual_contribution,
-    .compute_all                 = .compute_all
-  ))
-}
-
 
 #' Compute Derived Time-Series Metrics
 #'
@@ -635,101 +469,302 @@ compute_metrics.tdf_long <- function(
 #' and deflators. Seamlessly supports both \code{tdf_long} and \code{tdf} formats via S3 dispatch.
 #'
 #' @details
-#' The function relies on the presence of a \code{time} column and a \code{value.level}
-#' column within the input data. Depending on the requested metrics, other metadata columns
-#' may be required:
+#' The calculation engine is driven by a declarative metric registry and a topological
+#' dependency graph. If you request a complex metric (e.g., \code{contribution_growth_rate}),
+#' the engine will automatically resolve and compute all prerequisites (e.g., \code{share_prev_year}
+#' and \code{growth_rate}) in the correct chronological order.
+#'
+#' \strong{Important Limitations:}
 #' \itemize{
-#'   \item \strong{Shares & Contributions:} Require \code{meta.parent} and
-#'   \code{meta.parent_disaggregation_group} to calculate proportions against a parent total.
-#'   \item \strong{Deflators:} Require the \code{meta.price_basis} column to contain matching
-#'   "real" and "nominal" pairs to compute the implicit price deflator.
+#'   \item \strong{Standard vs. Deflator:} Standard metrics and Deflator metrics cannot be computed
+#'   in the same call. They must be executed separately.
+#'   \item \strong{Wide \code{tdf} Objects:} When passing a \code{tdf} object (wide format), you may
+#'   only compute \strong{one} metric per call. \code{.compute_all} and deflator calculations are not
+#'   supported for \code{tdf} objects.
 #' }
 #'
-#' \strong{Warning for \code{tdf} Inputs:}
-#' When passing a \code{tdf} object (wide format), the function explicitly assumes that
-#' the existing values represent raw \strong{levels}. Ensure your \code{tdf} contains levels
-#' before using this function; attempting to run computations on pre-calculated rates or
-#' indices will result in incorrect mathematical outputs. Additionally, when using a
-#' \code{tdf} object, you may only compute \strong{one} metric per call.
-#' \strong{Note:} Deflator metrics and the \code{.compute_all} argument are \strong{not supported}
-#' for \code{tdf} objects and should only be used with \code{tdf_long}.
+#' @param dat A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
+#' and \code{value.level} columns.
 #'
-#' \strong{Important:} Standard metrics (growth, momentum, shares) and Deflator metrics
-#' cannot be computed in the same call because deflator calculations fundamentally reshape
-#' the data by merging real and nominal series. They must be executed in separate calls.
+#' @param level_prev_prd Logical. Compute Previous Period Level.
+#' @param level_prev_year Logical. Compute Previous Year Level.
+#' @param growth_rate Logical. Compute Growth Rate (YoY).
+#' @param momentum Logical. Compute Momentum (PoP).
+#' @param ln_growth_rate Logical. Compute Log Growth Rate (YoY).
+#' @param ln_momentum Logical. Compute Log Momentum (PoP).
+#' @param base_effect Logical. Compute Base Effect.
+#' @param ln_base_effect Logical. Compute Log Base Effect.
+#' @param growth_rate_prev_prd Logical. Compute Previous Period Growth.
+#' @param ln_growth_rate_prev_prd Logical. Compute Previous Period Log Growth.
+#' @param delta_growth_rate Logical. Compute Delta Growth Rate.
+#' @param delta_ln_growth_rate Logical. Compute Delta Log Growth.
+#' @param level_parent Logical. Compute Parent Level. Requires \code{meta.parent} hierarchy columns.
+#' @param share_pct Logical. Compute Share (%). Requires \code{meta.parent} hierarchy columns.
+#' @param share_prev_prd Logical. Compute Previous Period Share. Requires \code{meta.parent} hierarchy columns.
+#' @param share_prev_year Logical. Compute Previous Year Share. Requires \code{meta.parent} hierarchy columns.
+#' @param contribution_growth_rate Logical. Compute Growth Contribution. Requires \code{meta.parent} hierarchy columns.
+#' @param contribution_momentum Logical. Compute Momentum Contribution. Requires \code{meta.parent} hierarchy columns.
+#' @param contribution_growth_rate_pct Logical. Compute Relative Growth Contribution (%). Requires \code{meta.parent} hierarchy columns.
+#' @param contribution_momentum_pct Logical. Compute Relative Momentum Contribution (%). Requires \code{meta.parent} hierarchy columns.
+#' @param annual_contribution Logical. Compute Annual Contribution.
+#' @param SA Logical. Compute Seasonal Adjustment. Requires quarterly or monthly frequency.
+#' @param seasonally_adjusted Logical. Compute Seasonally Adjusted Level. Requires quarterly or monthly frequency.
+#' @param SAAR Logical. Compute SAAR (Seasonally Adjusted Annual Rate). Requires quarterly or monthly frequency.
 #'
-#' @param dat A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least
-#' \code{time} and \code{value.level} columns if it is a \code{tdf_long}. If a \code{tdf}
-#' object is provided, its values are assumed to represent levels.
+#' @param deflator Logical. Compute the Implicit Price Deflator. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.
+#' @param deflator_inflation Logical. Compute Deflator Inflation. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.
 #'
-#' @param level_prev_prd,level_prev_year Logical. Compute the raw level values of the previous period or previous year.
-#' @param growth_rate,momentum Logical. Compute year-on-year growth rate or period-on-period momentum.
-#' @param ln_growth_rate,ln_momentum Logical. Compute logarithmic versions of growth rate and momentum.
-#' @param base_effect,ln_base_effect Logical. Compute the base effect (negative of previous year's momentum).
-#' @param growth_rate_prev_prd,ln_growth_rate_prev_prd Logical. Extract the growth rate of the previous period.
-#' @param delta_growth_rate,delta_ln_growth_rate Logical. Compute the change in growth rate from the previous period.
-#' @param level_parent Logical. Extract the raw level of the parent component.
-#' @param share_pct,share_prev_prd,share_prev_year Logical. Compute the component's percentage share of the parent total for current, previous period, or previous year.
-#' @param contribution_growth_rate,contribution_momentum Logical. Compute the component's absolute contribution to the parent's growth or momentum.
-#' @param contribution_growth_rate_pct,contribution_momentum_pct Logical. Compute the component's percentage (relative) contribution to the parent's growth or momentum.
-#' @param annual_contribution Logical. Compute the component's share within the annual total.
-#'
-#' @param deflator,deflator_inflation Logical. Compute the implicit price deflator (Nominal / Real * 100) and its inflation rate. Cannot be TRUE if any standard metrics are TRUE. \strong{Not applicable for \code{tdf} objects.}
-#' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if the deflator flags are triggered). Default is \code{FALSE}. \strong{Not applicable for \code{tdf} objects.}
+#' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if a deflator flag is triggered). Default is \code{FALSE}.
+#' @param .avoid_during_compute_all Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.
+#' @param ... Additional arguments passed to methods.
 #'
 #' @return Depending on the input class:
 #' \itemize{
-#'   \item For \code{tdf_long}: Identical to the input, but with newly appended columns for each
-#'   requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+#'   \item For \code{tdf_long}: Identical to the input, but with newly appended columns for each requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
 #'   \item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
 #' }
 #'
 #' @export
-compute_metrics <- function(
+compute_metrics <- function(dat, ...) UseMethod("compute_metrics")
+
+#' @export
+compute_metrics.tdf_long <- function(
     dat,
-    level_prev_prd               = FALSE,
-    level_prev_year              = FALSE,
-    growth_rate                  = FALSE,
-    momentum                     = FALSE,
-    ln_growth_rate               = FALSE,
-    ln_momentum                  = FALSE,
-    base_effect                  = FALSE,
-    ln_base_effect               = FALSE,
-    growth_rate_prev_prd         = FALSE,
-    ln_growth_rate_prev_prd      = FALSE,
-    delta_growth_rate            = FALSE,
-    delta_ln_growth_rate         = FALSE,
-    level_parent                 = FALSE,
-    share_pct                    = FALSE,
-    share_prev_prd               = FALSE,
-    share_prev_year              = FALSE,
-    contribution_growth_rate     = FALSE,
-    contribution_momentum        = FALSE,
+    level_prev_prd = FALSE,
+    level_prev_year = FALSE,
+    growth_rate = FALSE,
+    momentum = FALSE,
+    ln_growth_rate = FALSE,
+    ln_momentum = FALSE,
+    base_effect = FALSE,
+    ln_base_effect = FALSE,
+    growth_rate_prev_prd = FALSE,
+    ln_growth_rate_prev_prd = FALSE,
+    delta_growth_rate = FALSE,
+    delta_ln_growth_rate = FALSE,
+    level_parent = FALSE,
+    share_pct = FALSE,
+    share_prev_prd = FALSE,
+    share_prev_year = FALSE,
+    contribution_growth_rate = FALSE,
+    contribution_momentum = FALSE,
     contribution_growth_rate_pct = FALSE,
-    contribution_momentum_pct    = FALSE,
-    annual_contribution          = FALSE,
-    deflator                     = FALSE,
-    deflator_inflation           = FALSE,
-    .compute_all                 = FALSE
-){
-  UseMethod("compute_metrics")
+    contribution_momentum_pct = FALSE,
+    annual_contribution = FALSE,
+    SA = FALSE,
+    seasonally_adjusted = FALSE,
+    SAAR = FALSE,
+    deflator = FALSE,
+    deflator_inflation = FALSE,
+    .compute_all = FALSE,
+    .avoid_during_compute_all = "Seasonal"
+) {
+  all_args <- as.list(environment())
+  has_deflator <- isTRUE(deflator) || isTRUE(deflator_inflation)
+
+  ignore_args <- c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation")
+  standard_args <- all_args[setdiff(names(all_args), ignore_args)]
+
+  has_standard <- any(unlist(standard_args) == TRUE) || (isTRUE(.compute_all) && !has_deflator)
+
+  if (has_standard && has_deflator) {
+    stop("Cannot compute standard metrics and deflator metrics simultaneously. Please calculate them in separate calls.", call. = FALSE)
+  }
+
+  if (has_deflator) {
+    return(compute_deflator_metrics(
+      dat,
+      deflator = deflator,
+      deflator_inflation = deflator_inflation,
+      .compute_all = .compute_all
+    ))
+  }
+
+  if (isTRUE(.compute_all)) {
+    requested <- names(standard_args)
+
+    # Exclude metrics belonging to specified categories
+    if (!is.null(.avoid_during_compute_all) && length(.avoid_during_compute_all) > 0 && !all(.avoid_during_compute_all == "")) {
+      metrics_to_drop <- names(metric_registry)[
+        vapply(metric_registry, function(m) m$category %in% .avoid_during_compute_all, logical(1))
+      ]
+      requested <- setdiff(requested, metrics_to_drop)
+    }
+  } else {
+    requested <- names(standard_args)[unlist(standard_args) == TRUE]
+  }
+
+  compute_metrics_engine(dat, requested, metric_registry)
 }
 
+#' @export
+compute_metrics.tdf <- function(
+    dat,
+    level_prev_prd = FALSE,
+    level_prev_year = FALSE,
+    growth_rate = FALSE,
+    momentum = FALSE,
+    ln_growth_rate = FALSE,
+    ln_momentum = FALSE,
+    base_effect = FALSE,
+    ln_base_effect = FALSE,
+    growth_rate_prev_prd = FALSE,
+    ln_growth_rate_prev_prd = FALSE,
+    delta_growth_rate = FALSE,
+    delta_ln_growth_rate = FALSE,
+    level_parent = FALSE,
+    share_pct = FALSE,
+    share_prev_prd = FALSE,
+    share_prev_year = FALSE,
+    contribution_growth_rate = FALSE,
+    contribution_momentum = FALSE,
+    contribution_growth_rate_pct = FALSE,
+    contribution_momentum_pct = FALSE,
+    annual_contribution = FALSE,
+    SA = FALSE,
+    seasonally_adjusted = FALSE,
+    SAAR = FALSE
+) {
+  all_args <- as.list(environment())
+  metric_args <- all_args[setdiff(names(all_args), "dat")]
+  requested <- names(metric_args)[unlist(metric_args) == TRUE]
 
+  if (length(requested) > 1) {
+    stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE for a wide .tdf.", call. = FALSE)
+  }
 
+  if (length(requested) == 0) return(dat)
+
+  dl <- as_tdf_long(dat)
+  dl2 <- compute_metrics_engine(dl, requested, metric_registry)
+  d2 <- as_tdf(dl2, value_name = requested[1])
+  stats::na.omit(d2)
+}
 
 # =============================================================================
-# compute_standard_metrics
+# SIGNATURE / REGISTRY CONSISTENCY CHECK
 # =============================================================================
-# Orchestrates full metric computation including deflator metrics.
+# Ensures that manual arguments in the exported functions completely map
+# to the declarative `metric_registry`. Fails fast on load if drifted.
+
+stopifnot(
+  "compute_metrics.tdf_long args out of sync with metric_registry" =
+    setequal(
+      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation")),
+      names(metric_registry)
+    ),
+  "compute_metrics.tdf args out of sync with metric_registry" =
+    setequal(setdiff(names(formals(compute_metrics.tdf)), "dat"), names(metric_registry))
+)
+
+# =============================================================================
+# DEFLATOR PATH
 # =============================================================================
 
-compute_standard_metrics <- function(tdl) {
+deflator_registry <- list(
+  deflator = new_metric(
+    label = "Implicit Price Deflator", output = ".value.deflator",
+    compute_fn = function(dat, ctx) {
+      dat$.value.deflator <- safe_divide(dat$value.level_nominal, dat$value.level_real) * 100
+      dat
+    }
+  ),
+  deflator_inflation = new_metric(
+    label = "Deflator Inflation", output = ".value.deflator_inflation", depends = "deflator",
+    compute_fn = function(dat, ctx) {
+      dat <- dat %>% dplyr::mutate(.time_prev_year = previous_year(time))
+
+      lookup <- dat %>%
+        dplyr::select(time, dplyr::all_of(ctx$id_cols), .value.deflator) %>%
+        dplyr::rename(.value.deflator_prev_year = .value.deflator)
+
+      dat %>%
+        dplyr::left_join(lookup, by = ctx$join_prev_year) %>%
+        dplyr::mutate(.value.deflator_inflation = (safe_divide(.value.deflator, .value.deflator_prev_year) - 1) * 100) %>%
+        dplyr::select(-.time_prev_year, -.value.deflator_prev_year)
+    }
+  )
+)
+
+compute_deflator_metrics <- function(dat, deflator = FALSE, deflator_inflation = FALSE,
+                                     .compute_all = FALSE, .blank_for_real_nominal_missing = FALSE) {
+
+  flags <- list(deflator = deflator, deflator_inflation = deflator_inflation)
+
+  if (isTRUE(.compute_all)) {
+    requested <- names(flags)
+  } else {
+    requested <- names(flags)[unlist(flags) == TRUE]
+  }
+
+  if (length(requested) == 0) return(dat)
+
+  id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
+  missing_id_cols <- setdiff(id_cols, colnames(dat))
+  if (length(missing_id_cols) > 0) {
+    dat[missing_id_cols] <- "dummy"
+    if (dat$meta.release_tag[1] == "dummy" && length(unique(dat$meta.release_tag)) == 1) {
+      dat$meta.release_tag <- "#main"
+    }
+  }
+
+  dat_prep <- dat %>%
+    dplyr::mutate(
+      meta.price_basis = tolower(meta.price_basis),
+      .is_real    = stringr::str_detect(meta.price_basis, "real"),
+      .is_nominal = stringr::str_detect(meta.price_basis, "nominal"),
+      meta.price_basis = stringr::str_trim(stringr::str_remove(meta.price_basis, "real|nominal"))
+    )
+
+  valid <- any(dat_prep$.is_real, na.rm = TRUE) && any(dat_prep$.is_nominal, na.rm = TRUE)
+  if (!valid) {
+    if (.blank_for_real_nominal_missing) return(NULL)
+    stop("Not possible to calculate deflator and related measures! (real nominal both needed)", call. = FALSE)
+  }
+
+  join_cols <- c("time", "meta.name", "meta.disaggregation_group", "meta.release_tag", "meta.price_basis")
+  dat_defl <- dat_prep %>%
+    dplyr::filter(.is_real) %>%
+    dplyr::inner_join(dat_prep %>% dplyr::filter(.is_nominal), by = join_cols, suffix = c("_real", "_nominal"))
+
+  if (nrow(dat_defl) == 0) return(NULL)
+
+  join_keys_same <- setNames(id_cols, id_cols)
+  ctx <- list(
+    id_cols = id_cols,
+    join_keys_same = join_keys_same,
+    join_prev_year = c(setNames("time", ".time_prev_year"), join_keys_same)
+  )
+
+  order <- resolve_metric_order(requested, deflator_registry)
+
+  for (m in order) {
+    dat_defl <- deflator_registry[[m]]$compute_fn(dat_defl, ctx)
+  }
+
+  requested_cols <- paste0("value.", requested)
+  rename_map <- setNames(paste0(".", requested_cols), requested_cols)
+  rename_map <- rename_map[paste0(".", requested_cols) %in% colnames(dat_defl)]
+  dat_defl <- dat_defl %>% dplyr::rename(dplyr::all_of(rename_map))
+
+  dat_defl %>% dplyr::select(dplyr::all_of(c(join_cols, intersect(requested_cols, colnames(dat_defl)))))
+}
+
+# =============================================================================
+# compute_standard_metrics (Wrapper)
+# =============================================================================
+# Orchestrates full metric computation for a `tdl` object. Auto-resolves
+# missing parent hierarchies and routes data through both the standard
+# and deflator execution engines, supporting categorical metric avoidance.
+# =============================================================================
+
+compute_standard_metrics <- function(tdl, .avoid_during_compute_all = "Seasonal") {
 
   if (!"value.level" %in% colnames(tdl$data)) {
     stop("value.level column not found.", call. = FALSE)
   }
 
+  # Auto-attach parent hierarchy if missing BEFORE passing to the framework
   if (!all(c("meta.parent", "meta.parent_disaggregation_group") %in% colnames(tdl$data))) {
     message(
       "Note: meta.parent column not found in data. ",
@@ -741,14 +776,22 @@ compute_standard_metrics <- function(tdl) {
 
   dat_orig <- tdl$data
 
-  # Uses the compute_metrics_part directly since this orchestrates them separately
-  tdl$data <- compute_metrics_part(dat_orig, .compute_all = TRUE)
+  # 1. Compute all standard metrics using the new framework's explicit method
+  tdl$data <- compute_metrics.tdf_long(
+    dat_orig,
+    .compute_all = TRUE,
+    .avoid_during_compute_all = .avoid_during_compute_all
+  )
 
+  # 2. Compute deflator metrics using the new standalone deflator function
   dat_defl <- compute_deflator_metrics(
     dat_orig,
-    .compute_all = TRUE, .blank_for_real_nominal_missing = TRUE)
+    .compute_all = TRUE,
+    .blank_for_real_nominal_missing = TRUE
+  )
 
   if (is.null(dat_defl)) return(list(main = tdl))
 
   list(main = tdl, deflator = dat_defl)
 }
+

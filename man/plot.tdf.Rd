@@ -6,12 +6,14 @@
 \usage{
 \method{plot}{tdf}(
   x,
+  type = c("echarts", "excel"),
   xl_file,
   na_omit = TRUE,
   single_layer_monthly = TRUE,
   second_layer_monthly = c("fy", "calender"),
   num_digits_for_round = 1,
-  type = c("echarts", "excel"),
+  asterisk_data_till = 0,
+  asterisk_data_time_points = NULL,
   title = NULL,
   subtitle = NULL,
   ...
@@ -19,6 +21,8 @@
 }
 \arguments{
 \item{x}{A tdf (time-series data frame) object to be plotted.}
+
+\item{type}{Character string. The output format for the chart. Either "echarts" (interactive HTML widget) or "excel" (native Excel chart). Defaults to "echarts".}
 
 \item{xl_file}{Character string. The path to the output Excel file. Must be provided if type = "excel".}
 
@@ -29,8 +33,6 @@
 \item{second_layer_monthly}{Character string. Specifies the macro-period layer for monthly data when single_layer_monthly = FALSE. One of "fy" (fiscal year) or "calender" (calendar year).}
 
 \item{num_digits_for_round}{Numeric. Number of decimal places to round numeric columns to. Defaults to 1.}
-
-\item{type}{Character string. The output format for the chart. Either "echarts" (interactive HTML widget) or "excel" (native Excel chart). Defaults to "echarts".}
 
 \item{title}{Character string or NULL. The main title of the chart.}
 

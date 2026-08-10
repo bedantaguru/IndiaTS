@@ -1514,7 +1514,7 @@ Ops.fiscal_period <- function(e1, e2) {
 
   }
 
-  # 2. For all other non-arithmetic operators behave like character
+  # 2. For all other non-arithmetic / non logical operators behave like character
   if (!(op %in% c("+", "-"))) {
     return(do.call(op, list(as.character(e1), as.character(e2))))
   }
@@ -1564,6 +1564,15 @@ Ops.fiscal_period <- function(e1, e2) {
 
   n_period <- length(period_vec)
   n_num <- length(num_vec)
+
+  # Special Case of 1 : many recycling
+  if((op %in% c("+","-")) && n_period == 1 && n_num > 1){
+    if(period_first){
+      return(do.call(op, list(rep(e1, length(e2)), e2)))
+    } else {
+      return(do.call(op, list(e1, rep(e2, length(e1)))))
+    }
+  }
 
   # strict length rule (no arbitrary recycling)
   if (!(n_num == 1 || n_num == n_period)) {
@@ -1706,6 +1715,11 @@ Ops.calendar_period <- function(e1, e2) {
   n_period <- length(period_vec)
   n_num <- length(num_vec)
 
+  # Special Case of 1 : many recycling
+  if((op %in% c("+","-")) && n_period == 1 && n_num > 1){
+    return(do.call(op, list(rep(e1, length(e2)), e2)))
+  }
+
   # strict length rule
   if (!(n_num == 1 || n_num == n_period)) {
     stop("Numeric operand must be length 1 (scalar) or same length as calendar_period.", call. = FALSE)
@@ -1775,5 +1789,27 @@ Ops.calendar_period <- function(e1, e2) {
 `[.calendar_period` <- function(x, i, ...) {
   res <- NextMethod("[")
   class(res) <- class(x)
+  res
+}
+
+
+#' @export
+rep.fiscal_period <- function(x, ...) {
+  res <- NextMethod()
+
+  # Restore the class
+  class(res) <- class(x)
+
+  res
+}
+
+
+#' @export
+rep.calendar_period <- function(x, ...) {
+  res <- NextMethod()
+
+  # Restore the class
+  class(res) <- class(x)
+
   res
 }

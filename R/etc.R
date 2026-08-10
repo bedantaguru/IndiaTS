@@ -15,10 +15,10 @@ is_period_type <- function(x){
 
 
 str_clean <- function(x,
-                       allow_numbers = TRUE,
-                       allow_specials = FALSE,
-                       no_space = FALSE,
-                       special_chars = "_%&@") {
+                      allow_numbers = TRUE,
+                      allow_specials = FALSE,
+                      no_space = FALSE,
+                      special_chars = "_%&@") {
 
   # 1. Validation & Setup
   if (length(x) == 0) return(character(0))
@@ -133,7 +133,9 @@ cols_causing_group_variation <- function(d, group_colnames) {
 }
 
 
-rows_append_distinct_df <- function(dmain, dincre, primary_key) {
+rows_append_distinct_df <- function(dmain, dincre, primary_key, type = c("left", "right")) {
+
+  type <- match.arg(type)
 
   if (!is.data.frame(dmain)) {
     stop("`dmain` must be a data.frame or tibble.", call. = FALSE)
@@ -141,6 +143,11 @@ rows_append_distinct_df <- function(dmain, dincre, primary_key) {
 
   if (!is.data.frame(dincre)) {
     stop("`dincre` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if(missing(primary_key)){
+    # plain rbind
+    return(dplyr::bind_rows(dmain, dincre))
   }
 
   if (!is.character(primary_key)) {
@@ -155,20 +162,40 @@ rows_append_distinct_df <- function(dmain, dincre, primary_key) {
     stop("All `primary_key` columns must exist in `dincre`.", call. = FALSE)
   }
 
-  dincre_excl <- dplyr::anti_join(
-    dincre,
-    dmain,
-    by = primary_key
-  )
+  if(type=="left"){
+    dincre_excl <- dplyr::anti_join(
+      dincre,
+      dmain,
+      by = primary_key
+    )
 
-  dplyr::bind_rows(
-    dmain,
-    dincre_excl
-  )
+    return(
+      dplyr::bind_rows(
+        dmain,
+        dincre_excl
+      )
+    )
+  } else {
+    dmain_excl <- dplyr::anti_join(
+      dmain,
+      dincre,
+      by = primary_key
+    )
+
+    return(
+      dplyr::bind_rows(
+        dmain_excl,
+        dincre
+      )
+    )
+  }
+
 }
 
 
-rows_append_distinct_lst <- function(df_list, primary_key) {
+rows_append_distinct_lst <- function(df_list, primary_key, type = c("left", "right")) {
+
+  type <- match.arg(type)
 
   if (!is.list(df_list)) {
     stop("Input must be a list of data.frames.", call. = FALSE)
@@ -181,20 +208,23 @@ rows_append_distinct_lst <- function(df_list, primary_key) {
   purrr::reduce(
     df_list,
     function(dmain, dincre) {
-      rows_append_distinct_df(dmain, dincre, primary_key)
+      rows_append_distinct_df(dmain, dincre, primary_key, type = type)
     }
   )
 }
 
 
-rows_append_distinct <- function(dmain, dincre = NULL, primary_key) {
+rows_append_distinct <- function(dmain, dincre = NULL, primary_key, type = c("left", "right")) {
+
+  type <- match.arg(type)
 
   if (is.list(dmain) && is.null(dincre)) {
 
     return(
       rows_append_distinct_lst(
         df_list = dmain,
-        primary_key = primary_key
+        primary_key = primary_key,
+        type = type
       )
     )
 
@@ -204,7 +234,8 @@ rows_append_distinct <- function(dmain, dincre = NULL, primary_key) {
       rows_append_distinct_df(
         dmain = dmain,
         dincre = dincre,
-        primary_key = primary_key
+        primary_key = primary_key,
+        type = type
       )
     )
 
@@ -233,3 +264,4 @@ drop_constant_cols <- function(data, na = FALSE) {
       })
     )
 }
+
