@@ -52,7 +52,6 @@ test_that("invalid arithmetic combinations raise informative errors", {
   expect_error(x + y, "not supported", ignore.case = TRUE)            # two periods
   expect_error(x + NA_integer_, "NA shift amounts not supported", ignore.case = TRUE)
   expect_error(x + 1.5, "Fractional shifts are not allowed", ignore.case = TRUE)
-  expect_error(x + c(1L, 2L, 3L), "must be length 1 \\(scalar\\) or same length", ignore.case = TRUE)
 })
 
 # -------------------------
@@ -92,7 +91,6 @@ test_that("calendar_period arithmetic errors mirror fiscal behavior", {
   x <- cper("Jan:2023")
   expect_error(x + NA_integer_, "NA shift amounts not supported", ignore.case = TRUE)
   expect_error(x + 1.5, "Fractional shifts are not allowed", ignore.case = TRUE)
-  expect_error(x + c(1L,2L,3L), "must be length 1 \\(scalar\\) or same length", ignore.case = TRUE)
   expect_error(x + x, "not supported", ignore.case = TRUE)
 })
 

@@ -50,6 +50,23 @@ new_metric <- function(label = "", description = "", category = "", output = "",
 
 # ---- metric compute factories ----------------------------------------------
 
+make_prev_n_metric <- function(out_col, n_lag) {
+  function(dat, ctx) {
+    lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), value.level)
+    names(lookup)[names(lookup) == "value.level"] <- out_col
+    dat$.time_prev_n_period <- dat$time - n_lag
+    ctx_by <- ctx$join_prev_period
+    names(ctx_by)[which(ctx_by=="time")] <- ".time_prev_n_period"
+    dat %>% dplyr::left_join(lookup, by = ctx_by)
+  }
+}
+
+# A specific example is: (but this is used for more generic usage)
+# make_prev_level_metric <- function(out_col, ctx_join_name) {
+#   make_prev_n_metric(out_col = out_col, ctx_join_name = ctx_join_name, n_lag = 1)
+# }
+
+
 make_prev_level_metric <- function(out_col, ctx_join_name) {
   function(dat, ctx) {
     lookup <- dat %>% dplyr::select(time, dplyr::all_of(ctx$id_cols), value.level)
@@ -557,15 +574,43 @@ compute_metrics.tdf_long <- function(
     deflator = FALSE,
     deflator_inflation = FALSE,
     .compute_all = FALSE,
-    .avoid_during_compute_all = "Seasonal"
+    .avoid_during_compute_all = "Seasonal",
+    # Custom function has to be either a simple function or a named list of functions
+    .custom_function = NULL
 ) {
+
   all_args <- as.list(environment())
   has_deflator <- isTRUE(deflator) || isTRUE(deflator_inflation)
 
-  ignore_args <- c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation")
+  ignore_args <- c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation", ".custom_function")
   standard_args <- all_args[setdiff(names(all_args), ignore_args)]
 
   has_standard <- any(unlist(standard_args) == TRUE) || (isTRUE(.compute_all) && !has_deflator)
+
+  ## custom function
+
+  f_present <- FALSE
+
+  cfs <- .custom_function
+
+  if(is.list(cfs)){
+
+    cfs <- cfs[!is.na(names(cfs)) & names(cfs) != ""]
+
+    if(length(names(cfs))>0){
+
+      if(all(vapply(cfs, is.function, logical(1)))){
+        f_present <- TRUE
+      }
+
+    }
+  }
+
+  if(is.function(cfs)) {
+    f_present <- TRUE
+    cfs <- list(custom_metric = .custom_function)
+  }
+
 
   if (has_standard && has_deflator) {
     stop("Cannot compute standard metrics and deflator metrics simultaneously. Please calculate them in separate calls.", call. = FALSE)
@@ -594,7 +639,47 @@ compute_metrics.tdf_long <- function(
     requested <- names(standard_args)[unlist(standard_args) == TRUE]
   }
 
-  compute_metrics_engine(dat, requested, metric_registry)
+  metric_registry_this <- metric_registry
+
+  if(f_present){
+
+    common_name <- intersect(requested, names(cfs))
+
+    if(length(common_name)>0){
+      warning(
+        paste0(
+          "Custom metric names overlap with existing metrics: ",
+          paste(common_names, collapse = ", "),
+          ". Results may be misleading."
+        ),
+        call. = FALSE
+      )
+    }
+
+    requested <- unique(c( requested, names(cfs)))
+
+    new_metric_registry <- cfs |> purrr::map2(
+      names(cfs), function(nd, nn){
+        new_metric(
+          label = paste0("Custom Function", nn),
+          category = "Custom",
+          output = paste0(".value.", nn),
+          compute_fn = function(dat, ctx){
+            dat <- dat |>
+              dplyr::group_by() |>
+              dplyr::arrange(.data$time) |>
+              dplyr::mutate(.value.custom_fn_tmp = nd( .data$value.level)) |>
+              dplyr::ungroup()
+
+            names(dat)[names(dat) == ".value.custom_fn_tmp"] <- paste0(".value.", nn)
+            dat
+          })
+      })
+
+    metric_registry_this <- c(metric_registry, new_metric_registry)
+  }
+
+  compute_metrics_engine(dat, requested, metric_registry_this)
 }
 
 #' @export
@@ -623,23 +708,105 @@ compute_metrics.tdf <- function(
     annual_contribution = FALSE,
     SA = FALSE,
     seasonally_adjusted = FALSE,
-    SAAR = FALSE
+    SAAR = FALSE,
+    .custom_function = NULL
 ) {
-  all_args <- as.list(environment())
-  metric_args <- all_args[setdiff(names(all_args), "dat")]
-  requested <- names(metric_args)[unlist(metric_args) == TRUE]
 
-  if (length(requested) > 1) {
-    stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE for a wide .tdf.", call. = FALSE)
+  f_mode <- is.function(.custom_function)
+
+  metric_registry_this <- metric_registry
+
+  if(f_mode){
+
+    requested <- "custom_fn"
+
+    metric_registry_this$custom_fn <- new_metric(
+      label = "Custom Function", category = "Custom", output = ".value.custom_fn",
+      compute_fn = function(dat, ctx){
+        dat |>
+          dplyr::group_by() |>
+          dplyr::arrange(.data$time) |>
+          dplyr::mutate(.value.custom_fn = .custom_function(value.level)) |>
+          dplyr::ungroup()
+      })
+
+  } else {
+    all_args <- as.list(environment())
+    metric_args <- all_args[setdiff(names(all_args), "dat")]
+    requested <- names(metric_args)[unlist(metric_args) == TRUE]
+
+    if (length(requested) > 1) {
+      stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE for a wide .tdf.", call. = FALSE)
+    }
+
+    if (length(requested) == 0) return(dat)
+
   }
 
-  if (length(requested) == 0) return(dat)
-
   dl <- as_tdf_long(dat)
-  dl2 <- compute_metrics_engine(dl, requested, metric_registry)
+  dl2 <- compute_metrics_engine(dl, requested, metric_registry_this)
   d2 <- as_tdf(dl2, value_name = requested[1])
   stats::na.omit(d2)
 }
+
+
+#' @export
+compute_metrics.data.frame <- function(dat, ...) {
+
+  out_dat <- NULL
+
+  chk_tdfl <- tryCatch(
+    {
+      suppressWarnings(
+        tdf_long_check_structure(dat, hmap = data.frame())
+      )
+      TRUE
+    }, error = function(e) FALSE
+  )
+
+  if (!chk_tdfl) {
+
+    chk_tdf <- tryCatch(
+      {
+        d0 <- as_tdf_for_ts_and_df(dat)
+        if (NCOL(d0) < NCOL(dat)) {
+          data.frame()
+        } else {
+          d0
+        }
+      },
+      error = function(e) data.frame(),
+      warning = function(w) data.frame()
+    )
+
+    if (NROW(chk_tdf) == 0 || (NCOL(chk_tdf) < NCOL(dat))) {
+      stop("Input data.frame cannot be cast to 'tdf' or 'tdf_long' format. Please verify your data structure.", call. = FALSE)
+    } else {
+      message("Data implicitly & internally converted to 'tdf' format. To suppress this message, explicitly cast your data.frame prior to computing metrics.")
+      out_dat <- compute_metrics.tdf(chk_tdf, ...)
+    }
+
+  } else {
+    # Note this conversion is not required this_dat <- as_tdf_long.data.frame(dat) as compute_metrics.tdf_long does not strictly needs tdf-long
+    out_dat <- compute_metrics.tdf_long(dat, ...)
+  }
+
+  if (NROW(out_dat) == 0 || is.null(out_dat)) {
+    stop("Can't Compute Metric: Please explicitly convert the input data.frame to either 'tdf' or 'tdf_long' format before proceeding.", call. = FALSE)
+  }
+
+  # Reset class and attributes
+  ao <- attributes(out_dat)
+  ai <- attributes(dat)
+
+  ao <- ao[names(ai)]
+  ao$class <- ai$class
+  attributes(out_dat) <- ao
+  class(out_dat) <- class(dat)
+
+  out_dat
+}
+
 
 # =============================================================================
 # SIGNATURE / REGISTRY CONSISTENCY CHECK
@@ -650,11 +817,11 @@ compute_metrics.tdf <- function(
 stopifnot(
   "compute_metrics.tdf_long args out of sync with metric_registry" =
     setequal(
-      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation")),
+      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation",".custom_function")),
       names(metric_registry)
     ),
   "compute_metrics.tdf args out of sync with metric_registry" =
-    setequal(setdiff(names(formals(compute_metrics.tdf)), "dat"), names(metric_registry))
+    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function")), names(metric_registry))
 )
 
 # =============================================================================

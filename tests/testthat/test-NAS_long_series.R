@@ -172,7 +172,7 @@ test_that("NAS long series works on public functions", {
 
   dchk3 <- dchk2 |> mutate(meta.price_basis = sp_gva$meta.price_basis[1]) |>
     select(time, value.level = value.splice_level, meta.price_basis) |>
-    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = T)
+    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = TRUE)
 
   dchk4 <- dchk1 |> select(time, value.level, pbase = meta.price_basis) |> compute_metrics(growth_rate = TRUE)
 

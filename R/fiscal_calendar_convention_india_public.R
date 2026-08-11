@@ -1525,6 +1525,38 @@ Ops.fiscal_period <- function(e1, e2) {
   e1_is_num <- is.numeric(e1)
   e2_is_num <- is.numeric(e2)
 
+  # Specific case of subtract
+  if((e1_is_period && e2_is_period) && (op == "-")) {
+
+    doable <- FALSE
+
+    if(length(e1)==1 || length(e2)==1){
+      doable <- TRUE
+    }
+
+    if(length(e1) == length(e2)){
+      doable <- TRUE
+    }
+
+    if(doable){
+      if(frequency.fiscal_period(e1, singular = TRUE)!= frequency.fiscal_period(e2, singular = TRUE)) {
+        doable <- FALSE
+      }
+    }
+
+    if(doable){
+
+      fq <- frequency.fiscal_period(e1, singular = TRUE)
+      dif <- difftime(as.Date(e1), as.Date(e2), units = "days") |> as.numeric()
+      u <- freq_info_for_one_freq(fq)
+      return(as.integer(round(dif/(365/u$unit))))
+
+    } else {
+      stop("Subtraction requires the two elements to have the same frequency and either equal lengths or one element of length 1.", call. = FALSE)
+    }
+
+  }
+
   if (e1_is_period && e2_is_period) {
     stop("Operation between two fiscal_period objects is not supported.", call. = FALSE)
   }

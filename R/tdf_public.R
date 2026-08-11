@@ -111,6 +111,8 @@ as_tdf.tdf_long <- function(
     divergence_tol_pct = 5,
     add_price_basis_as_tag, use_short_names = FALSE, ...){
 
+  colnames(df) <- tolower(colnames(df))
+
   if(is.null(value_name)){
     value_name <- colnames(df)[stringr::str_detect(colnames(df), "value\\.")]
     value_name <- value_name[1]
