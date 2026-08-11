@@ -2,15 +2,89 @@
 % Please edit documentation in R/tdf_long_operations_value.R
 \name{compute_metrics}
 \alias{compute_metrics}
+\alias{compute_metrics.tdf_long}
+\alias{compute_metrics.tdf}
 \title{Compute Derived Time-Series Metrics}
 \usage{
 compute_metrics(dat, ...)
+
+\method{compute_metrics}{tdf_long}(
+  dat,
+  level_lag_n = FALSE,
+  level_lead_n = FALSE,
+  level_prev_prd = FALSE,
+  level_prev_year = FALSE,
+  growth_rate = FALSE,
+  momentum = FALSE,
+  ln_growth_rate = FALSE,
+  ln_momentum = FALSE,
+  base_effect = FALSE,
+  ln_base_effect = FALSE,
+  growth_rate_prev_prd = FALSE,
+  ln_growth_rate_prev_prd = FALSE,
+  delta_growth_rate = FALSE,
+  delta_ln_growth_rate = FALSE,
+  level_parent = FALSE,
+  share_pct = FALSE,
+  share_prev_prd = FALSE,
+  share_prev_year = FALSE,
+  contribution_growth_rate = FALSE,
+  contribution_momentum = FALSE,
+  contribution_growth_rate_pct = FALSE,
+  contribution_momentum_pct = FALSE,
+  annual_contribution = FALSE,
+  SA = FALSE,
+  seasonally_adjusted = FALSE,
+  SAAR = FALSE,
+  deflator = FALSE,
+  deflator_inflation = FALSE,
+  .compute_all = FALSE,
+  .avoid_during_compute_all = "Seasonal",
+  .custom_function = NULL,
+  .options = list(level_lag_n = 1, level_lead_n = 1)
+)
+
+\method{compute_metrics}{tdf}(
+  dat,
+  level_lag_n = FALSE,
+  level_lead_n = FALSE,
+  level_prev_prd = FALSE,
+  level_prev_year = FALSE,
+  growth_rate = FALSE,
+  momentum = FALSE,
+  ln_growth_rate = FALSE,
+  ln_momentum = FALSE,
+  base_effect = FALSE,
+  ln_base_effect = FALSE,
+  growth_rate_prev_prd = FALSE,
+  ln_growth_rate_prev_prd = FALSE,
+  delta_growth_rate = FALSE,
+  delta_ln_growth_rate = FALSE,
+  level_parent = FALSE,
+  share_pct = FALSE,
+  share_prev_prd = FALSE,
+  share_prev_year = FALSE,
+  contribution_growth_rate = FALSE,
+  contribution_momentum = FALSE,
+  contribution_growth_rate_pct = FALSE,
+  contribution_momentum_pct = FALSE,
+  annual_contribution = FALSE,
+  SA = FALSE,
+  seasonally_adjusted = FALSE,
+  SAAR = FALSE,
+  .custom_function = NULL,
+  .options = list(level_lag_n = 1, level_lead_n = 1)
+)
 }
 \arguments{
 \item{dat}{A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
 and \code{value.level} columns.}
 
 \item{...}{Additional arguments passed to methods.}
+
+\item{level_lag_n}{Logical. Compute Previous n-Period Level (Lag). The lag value is defined in \code{.options}.}
+
+\item{level_lead_n}{Logical. Compute Next n-Period Level (Lead). The lead value is defined in \code{.options}.}
 
 \item{level_prev_prd}{Logical. Compute Previous Period Level.}
 
@@ -67,11 +141,15 @@ and \code{value.level} columns.}
 \item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if a deflator flag is triggered). Default is \code{FALSE}.}
 
 \item{.avoid_during_compute_all}{Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.}
+
+\item{.custom_function}{A function or a named list of functions to apply to the \code{value.level} column. The generated metric will be appended as \code{.value.custom_fn} or \code{.value.<list_name>}.}
+
+\item{.options}{A named list of parameters for dynamic metrics. Currently supports \code{level_lag_n} and \code{level_lead_n} integers. Default is \code{list(level_lag_n = 1, level_lead_n = 1)}.}
 }
 \value{
 Depending on the input class:
 \itemize{
-\item For \code{tdf_long}: Identical to the input, but with newly appended columns for each requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+\item For \code{tdf_long} or \code{data.frame}: The input data with newly appended columns for each requested metric, prefixed with \code{.value.} (e.g., \code{.value.growth_rate}).
 \item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
 }
 }
@@ -91,7 +169,7 @@ and \code{growth_rate}) in the correct chronological order.
 \item \strong{Standard vs. Deflator:} Standard metrics and Deflator metrics cannot be computed
 in the same call. They must be executed separately.
 \item \strong{Wide \code{tdf} Objects:} When passing a \code{tdf} object (wide format), you may
-only compute \strong{one} metric per call. \code{.compute_all} and deflator calculations are not
-supported for \code{tdf} objects.
+only compute \strong{one} metric per call. \code{.compute_all}, deflator calculations, and custom
+functions returning multiple metrics are restricted or not supported for wide \code{tdf} objects.
 }
 }

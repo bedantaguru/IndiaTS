@@ -131,6 +131,18 @@ make_contribution_metric <- function(out_col, share_col, rate_col) {
 
 metric_registry <- list(
 
+  # Placeholder for option passing
+  level_lag_n = new_metric(
+    label = "Previous n-Period Level (Lag)", category = "Level", output = ".value.level_lag_n",
+    compute_fn = make_prev_n_metric(".value.level_lag_n", n_lag = 0)
+  ),
+
+  level_lead_n = new_metric(
+    label = "Next n-Period Level (Lead)", category = "Level", output = ".value.level_lead_n",
+    compute_fn = make_prev_n_metric(".value.level_lead_n", n_lag = 0)
+  ),
+
+
   level_prev_prd = new_metric(
     label = "Previous Period Level", category = "Level", output = ".value.level_prev_prd",
     compute_fn = make_prev_level_metric(".value.level_prev_prd", "join_prev_period")
@@ -496,13 +508,15 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #'   \item \strong{Standard vs. Deflator:} Standard metrics and Deflator metrics cannot be computed
 #'   in the same call. They must be executed separately.
 #'   \item \strong{Wide \code{tdf} Objects:} When passing a \code{tdf} object (wide format), you may
-#'   only compute \strong{one} metric per call. \code{.compute_all} and deflator calculations are not
-#'   supported for \code{tdf} objects.
+#'   only compute \strong{one} metric per call. \code{.compute_all}, deflator calculations, and custom
+#'   functions returning multiple metrics are restricted or not supported for wide \code{tdf} objects.
 #' }
 #'
 #' @param dat A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
 #' and \code{value.level} columns.
 #'
+#' @param level_lag_n Logical. Compute Previous n-Period Level (Lag). The lag value is defined in \code{.options}.
+#' @param level_lead_n Logical. Compute Next n-Period Level (Lead). The lead value is defined in \code{.options}.
 #' @param level_prev_prd Logical. Compute Previous Period Level.
 #' @param level_prev_year Logical. Compute Previous Year Level.
 #' @param growth_rate Logical. Compute Growth Rate (YoY).
@@ -533,20 +547,26 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #'
 #' @param .compute_all Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if a deflator flag is triggered). Default is \code{FALSE}.
 #' @param .avoid_during_compute_all Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.
+#' @param .custom_function A function or a named list of functions to apply to the \code{value.level} column. The generated metric will be appended as \code{.value.custom_fn} or \code{.value.<list_name>}.
+#' @param .options A named list of parameters for dynamic metrics. Currently supports \code{level_lag_n} and \code{level_lead_n} integers. Default is \code{list(level_lag_n = 1, level_lead_n = 1)}.
 #' @param ... Additional arguments passed to methods.
 #'
 #' @return Depending on the input class:
 #' \itemize{
-#'   \item For \code{tdf_long}: Identical to the input, but with newly appended columns for each requested metric prefixed with \code{value.} (e.g., \code{value.growth_rate}).
+#'   \item For \code{tdf_long} or \code{data.frame}: The input data with newly appended columns for each requested metric, prefixed with \code{.value.} (e.g., \code{.value.growth_rate}).
 #'   \item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
 #' }
 #'
 #' @export
+#' @rdname compute_metrics
 compute_metrics <- function(dat, ...) UseMethod("compute_metrics")
 
 #' @export
+#' @rdname compute_metrics
 compute_metrics.tdf_long <- function(
     dat,
+    level_lag_n = FALSE,
+    level_lead_n = FALSE,
     level_prev_prd = FALSE,
     level_prev_year = FALSE,
     growth_rate = FALSE,
@@ -576,7 +596,11 @@ compute_metrics.tdf_long <- function(
     .compute_all = FALSE,
     .avoid_during_compute_all = "Seasonal",
     # Custom function has to be either a simple function or a named list of functions
-    .custom_function = NULL
+    .custom_function = NULL,
+    .options = list(
+      level_lag_n = 1,
+      level_lead_n = 1
+    )
 ) {
 
   all_args <- as.list(environment())
@@ -641,6 +665,15 @@ compute_metrics.tdf_long <- function(
 
   metric_registry_this <- metric_registry
 
+  # Dynamic (option linked measures) - need to update them
+  metric_registry_this$level_lag_n$compute_fn <- make_prev_n_metric(
+    ".value.level_lag_n", n_lag = as.integer(.options$level_lag_n))
+
+  metric_registry_this$level_lead_n$compute_fn <- make_prev_n_metric(
+    # Note the -1 sign here
+    ".value.level_lead_n", n_lag = -as.integer(.options$level_lead_n))
+
+
   if(f_present){
 
     common_name <- intersect(requested, names(cfs))
@@ -676,15 +709,18 @@ compute_metrics.tdf_long <- function(
           })
       })
 
-    metric_registry_this <- c(metric_registry, new_metric_registry)
+    metric_registry_this <- c(metric_registry_this, new_metric_registry)
   }
 
   compute_metrics_engine(dat, requested, metric_registry_this)
 }
 
 #' @export
+#' @rdname compute_metrics
 compute_metrics.tdf <- function(
     dat,
+    level_lag_n = FALSE,
+    level_lead_n = FALSE,
     level_prev_prd = FALSE,
     level_prev_year = FALSE,
     growth_rate = FALSE,
@@ -709,12 +745,25 @@ compute_metrics.tdf <- function(
     SA = FALSE,
     seasonally_adjusted = FALSE,
     SAAR = FALSE,
-    .custom_function = NULL
+    .custom_function = NULL,
+    .options = list(
+      level_lag_n = 1,
+      level_lead_n = 1
+    )
 ) {
 
   f_mode <- is.function(.custom_function)
 
   metric_registry_this <- metric_registry
+
+  # Dynamic (option linked measures) - need to update them
+  metric_registry_this$level_lag_n$compute_fn <- make_prev_n_metric(
+    ".value.level_lag_n", n_lag = as.integer(.options$level_lag_n))
+
+  metric_registry_this$level_lead_n$compute_fn <- make_prev_n_metric(
+    # Note the -1 sign here
+    ".value.level_lead_n", n_lag = -as.integer(.options$level_lead_n))
+
 
   if(f_mode){
 
@@ -817,11 +866,11 @@ compute_metrics.data.frame <- function(dat, ...) {
 stopifnot(
   "compute_metrics.tdf_long args out of sync with metric_registry" =
     setequal(
-      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation",".custom_function")),
+      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation",".custom_function",".options")),
       names(metric_registry)
     ),
   "compute_metrics.tdf args out of sync with metric_registry" =
-    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function")), names(metric_registry))
+    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function",".options")), names(metric_registry))
 )
 
 # =============================================================================
