@@ -600,7 +600,8 @@ compute_metrics.tdf_long <- function(
     .custom_function = NULL,
     .options = list(
       level_lag_n = 1,
-      level_lead_n = 1
+      level_lead_n = 1,
+      .custom_function = c("on_level","data")
     )
 ) {
 
@@ -615,6 +616,8 @@ compute_metrics.tdf_long <- function(
   has_standard <- any(unlist(standard_args) == TRUE) || (isTRUE(.compute_all) && !has_deflator)
 
   ## custom function
+
+  .options$.custom_function <- match.arg(.options$.custom_function, c("on_level","data"))
 
   f_present <- FALSE
 
@@ -701,10 +704,20 @@ compute_metrics.tdf_long <- function(
           category = "Custom",
           output = paste0(".value.", nn),
           compute_fn = function(dat, ctx){
+
             dat <- dat |>
               dplyr::group_by() |>
-              dplyr::arrange(.data$time) |>
-              dplyr::mutate(.value.custom_fn_tmp = nd( .data$value.level)) |>
+              dplyr::arrange(.data$time)
+
+            if(.options$.custom_function == "data"){
+              dat <- dat |>
+                dplyr::mutate(.value.custom_fn_tmp = nd( .data))
+            } else {
+              dat <- dat |>
+                dplyr::mutate(.value.custom_fn_tmp = nd( .data$value.level))
+            }
+
+            dat <- dat |>
               dplyr::ungroup()
 
             names(dat)[names(dat) == ".value.custom_fn_tmp"] <- paste0(".value.", nn)
