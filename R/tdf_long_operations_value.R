@@ -61,7 +61,7 @@ make_prev_n_metric <- function(out_col, n_lag) {
   }
 }
 
-# A specific example is: (but this is used for more generic usage)
+# A specific example is following: (but this is used for more generic usage)
 # make_prev_level_metric <- function(out_col, ctx_join_name) {
 #   make_prev_n_metric(out_col = out_col, ctx_join_name = ctx_join_name, n_lag = 1)
 # }
@@ -406,11 +406,11 @@ resolve_metric_order <- function(requested, registry) {
 compute_metrics_engine <- function(dat, requested, registry) {
 
   if (length(requested) == 0) {
-    message("compute_metrics: no output requested. Returning data unchanged.")
+    message("compute_metric: no output requested. Returning data unchanged.")
     return(dat)
   }
   if (!"value.level" %in% colnames(dat)) {
-    stop("compute_metrics: value.level column missing.", call. = FALSE)
+    stop("compute_metric: value.level column missing.", call. = FALSE)
   }
 
   requested_cols <- paste0("value.", requested)
@@ -452,7 +452,7 @@ compute_metrics_engine <- function(dat, requested, registry) {
     parent_needed <- requested[vapply(requested, function(m) identical(registry[[m]]$requires, "parent"), logical(1))]
     if (length(parent_needed) > 0) {
       warning(
-        "compute_metrics: meta.parent / meta.parent_disaggregation_group not found. ",
+        "compute_metric: meta.parent / meta.parent_disaggregation_group not found. ",
         "The following requested metrics will be dropped: ", paste(parent_needed, collapse = ", "),
         call. = FALSE
       )
@@ -559,12 +559,12 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #' }
 #'
 #' @export
-#' @rdname compute_metrics
-compute_metrics <- function(dat, ...) UseMethod("compute_metrics")
+#' @rdname compute_metric
+compute_metric <- function(dat, ...) UseMethod("compute_metric")
 
 #' @export
-#' @rdname compute_metrics
-compute_metrics.tdf_long <- function(
+#' @rdname compute_metric
+compute_metric.tdf_long <- function(
     dat,
     level_lag_n = FALSE,
     level_lead_n = FALSE,
@@ -732,8 +732,8 @@ compute_metrics.tdf_long <- function(
 }
 
 #' @export
-#' @rdname compute_metrics
-compute_metrics.tdf <- function(
+#' @rdname compute_metric
+compute_metric.tdf <- function(
     dat,
     level_lag_n = FALSE,
     level_lead_n = FALSE,
@@ -830,7 +830,7 @@ compute_metrics.tdf <- function(
 
 
 #' @export
-compute_metrics.data.frame <- function(dat, ...) {
+compute_metric.data.frame <- function(dat, ...) {
 
   out_dat <- NULL
 
@@ -862,12 +862,12 @@ compute_metrics.data.frame <- function(dat, ...) {
       stop("Input data.frame cannot be cast to 'tdf' or 'tdf_long' format. Please verify your data structure.", call. = FALSE)
     } else {
       message("Data implicitly & internally converted to 'tdf' format. To suppress this message, explicitly cast your data.frame prior to computing metrics.")
-      out_dat <- compute_metrics.tdf(chk_tdf, ...)
+      out_dat <- compute_metric.tdf(chk_tdf, ...)
     }
 
   } else {
-    # Note this conversion is not required this_dat <- as_tdf_long.data.frame(dat) as compute_metrics.tdf_long does not strictly needs tdf-long
-    out_dat <- compute_metrics.tdf_long(dat, ...)
+    # Note this conversion is not required this_dat <- as_tdf_long.data.frame(dat) as compute_metric.tdf_long does not strictly needs tdf-long
+    out_dat <- compute_metric.tdf_long(dat, ...)
   }
 
   if (NROW(out_dat) == 0 || is.null(out_dat)) {
@@ -894,13 +894,13 @@ compute_metrics.data.frame <- function(dat, ...) {
 # to the declarative `metric_registry`. Fails fast on load if drifted.
 
 stopifnot(
-  "compute_metrics.tdf_long args out of sync with metric_registry" =
+  "compute_metric.tdf_long args out of sync with metric_registry" =
     setequal(
-      setdiff(names(formals(compute_metrics.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation",".custom_function",".options")),
+      setdiff(names(formals(compute_metric.tdf_long)), c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation",".custom_function",".options")),
       names(metric_registry)
     ),
-  "compute_metrics.tdf args out of sync with metric_registry" =
-    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function",".options",".omit_na")), names(metric_registry))
+  "compute_metric.tdf args out of sync with metric_registry" =
+    setequal(setdiff(names(formals(compute_metric.tdf)), c("dat", ".custom_function",".options",".omit_na")), names(metric_registry))
 )
 
 # =============================================================================
@@ -1023,7 +1023,7 @@ compute_standard_metrics <- function(tdl, .avoid_during_compute_all = "Seasonal"
   dat_orig <- tdl$data
 
   # 1. Compute all standard metrics using the new framework's explicit method
-  tdl$data <- compute_metrics.tdf_long(
+  tdl$data <- compute_metric.tdf_long(
     dat_orig,
     .compute_all = TRUE,
     .avoid_during_compute_all = .avoid_during_compute_all

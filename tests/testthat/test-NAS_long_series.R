@@ -28,9 +28,9 @@ test_that("NAS long series works", {
   sp_gdp <- splice_series(nf$gdp$annual)
 
   chk11 <- sp_gdp$data |> filter(meta.release_tag == "#main", meta.disaggregation_group == "indicator") |>
-    compute_metrics(growth_rate = TRUE) |> select(time, spl_lvl = value.level , spl_gr = value.growth_rate)
+    compute_metric(growth_rate = TRUE) |> select(time, spl_lvl = value.level , spl_gr = value.growth_rate)
   chk12 <- nf$gdp$annual$data |> filter(meta.release_tag == "#main", meta.disaggregation_group == "indicator") |>
-    compute_metrics(growth_rate = TRUE) |> group_by(time) |> filter(meta.price_basis == max(meta.price_basis)) |>
+    compute_metric(growth_rate = TRUE) |> group_by(time) |> filter(meta.price_basis == max(meta.price_basis)) |>
     ungroup() |> select(time, lvl = value.level, gr = value.growth_rate)
   chk13 <- chk11 |>  dplyr::left_join(chk12, by = "time")
 
@@ -39,12 +39,12 @@ test_that("NAS long series works", {
 
 
   chk21 <- sp_gva$data |> filter(meta.release_tag == "#main", meta.disaggregation_group == "indicator") |>
-    compute_metrics(growth_rate = TRUE) |> select(time, lvl1 = value.level , gr1 = value.growth_rate)
+    compute_metric(growth_rate = TRUE) |> select(time, lvl1 = value.level , gr1 = value.growth_rate)
   chk22 <- sp_gva
   chk22$data <- chk22$data |> filter(meta.release_tag == "#main", meta.disaggregation_group != "indicator")
   chk22 <- aggregate_component(chk22)
   chk23 <- chk22$data |> filter(meta.release_tag == "#main", meta.disaggregation_group == "indicator") |>
-    compute_metrics(growth_rate = TRUE) |> select(time, lvl2 = value.level , gr2 = value.growth_rate)
+    compute_metric(growth_rate = TRUE) |> select(time, lvl2 = value.level , gr2 = value.growth_rate)
   chk24 <- chk21 |> dplyr::left_join(chk23, by = "time")
 
   expect_gt(round(mean(abs(chk24$gr1-chk24$gr2), na.rm = TRUE), 2), 0)
@@ -60,7 +60,7 @@ test_that("NAS long series works", {
     group_by(meta.low_freq_time) |>
     filter(meta.price_basis == max(meta.price_basis)) |>
     dplyr::arrange(as.Date(time)) |> ungroup() |> select(-n_qtrs) |>
-    compute_metrics(annual_contribution = TRUE)
+    compute_metric(annual_contribution = TRUE)
 
   chk32 <- chk31 |>
     select(time, meta.price_basis, value.level, value.annual_contribution, year = meta.low_freq_time) |>
@@ -70,9 +70,9 @@ test_that("NAS long series works", {
 
   chk33 <- chk32 |> mutate(meta.price_basis = sp_gva$data$meta.price_basis[1]) |>
     select(time, value.level = value.splice_level, meta.price_basis) |>
-    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = T)
+    dplyr::arrange(as.Date(time)) |> compute_metric(growth_rate = T)
 
-  chk34 <- chk31 |> select(time, value.level, pbase = meta.price_basis) |> compute_metrics(growth_rate = TRUE)
+  chk34 <- chk31 |> select(time, value.level, pbase = meta.price_basis) |> compute_metric(growth_rate = TRUE)
 
   chk35 <- chk33 |> dplyr::left_join(chk34, by = "time", suffix = c("","_asis")) |>
     mutate(dlt = abs(value.growth_rate - value.growth_rate_asis) |> round(0)) |>
@@ -94,7 +94,7 @@ test_that("NAS long series works", {
     group_by(meta.low_freq_time) |>
     filter(meta.price_basis == max(meta.price_basis)) |>
     dplyr::arrange(as.Date(time)) |> ungroup() |> select(-n_qtrs) |>
-    compute_metrics(annual_contribution = TRUE)
+    compute_metric(annual_contribution = TRUE)
 
   chk42 <- chk41 |>
     select(time, meta.price_basis, value.level, value.annual_contribution, year = meta.low_freq_time) |>
@@ -104,9 +104,9 @@ test_that("NAS long series works", {
 
   chk43 <- chk42 |> mutate(meta.price_basis = sp_gva$data$meta.price_basis[1]) |>
     select(time, value.level = value.splice_level, meta.price_basis) |>
-    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = T)
+    dplyr::arrange(as.Date(time)) |> compute_metric(growth_rate = T)
 
-  chk44 <- chk41 |> select(time, value.level, pbase = meta.price_basis) |> compute_metrics(growth_rate = TRUE)
+  chk44 <- chk41 |> select(time, value.level, pbase = meta.price_basis) |> compute_metric(growth_rate = TRUE)
 
   chk45 <- chk43 |> dplyr::left_join(chk44, by = "time", suffix = c("","_asis")) |>
     mutate(dlt = abs(value.growth_rate - value.growth_rate_asis) |> round(0)) |>
@@ -159,7 +159,7 @@ test_that("NAS long series works on public functions", {
     group_by(meta.low_freq_time) |>
     filter(meta.price_basis == max(meta.price_basis)) |>
     dplyr::arrange(as.Date(time)) |> ungroup() |> select(-n_qtrs) |>
-    compute_metrics(annual_contribution = TRUE)
+    compute_metric(annual_contribution = TRUE)
 
   dchk2 <- dchk1 |>
     select(time, meta.price_basis, value.level, value.annual_contribution, year = meta.low_freq_time) |>
@@ -172,9 +172,9 @@ test_that("NAS long series works on public functions", {
 
   dchk3 <- dchk2 |> mutate(meta.price_basis = sp_gva$meta.price_basis[1]) |>
     select(time, value.level = value.splice_level, meta.price_basis) |>
-    dplyr::arrange(as.Date(time)) |> compute_metrics(growth_rate = TRUE)
+    dplyr::arrange(as.Date(time)) |> compute_metric(growth_rate = TRUE)
 
-  dchk4 <- dchk1 |> select(time, value.level, pbase = meta.price_basis) |> compute_metrics(growth_rate = TRUE)
+  dchk4 <- dchk1 |> select(time, value.level, pbase = meta.price_basis) |> compute_metric(growth_rate = TRUE)
 
   dchk5 <- dchk3 |> dplyr::left_join(dchk4, by = "time", suffix = c("","_asis")) |>
     mutate(dlt = abs(value.growth_rate - value.growth_rate_asis) |> round(0)) |>

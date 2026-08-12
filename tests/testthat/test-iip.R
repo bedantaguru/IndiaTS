@@ -5,17 +5,17 @@ test_that("IIP works", {
 
   iips <- iip |> auto_seas()
 
-  iipsa1 <- iip |> compute_metrics(SAAR = TRUE)
+  iipsa1 <- iip |> compute_metric(SAAR = TRUE)
 
   iipsa2 <- iips |> as_tdf_long()
 
-  iipsa2 <- iipsa2 |> compute_metrics(momentum = TRUE)
+  iipsa2 <- iipsa2 |> compute_metric(momentum = TRUE)
 
   iipsa2 <- iipsa2 |>
-    compute_metrics(
+    compute_metric(
       .custom_function = \(.data) ((.data$value.momentum/100+1)^12-1)*100,
       .options = list(.custom_function="data")) |>
-    compute_metrics(
+    compute_metric(
       .custom_function = list(saar_calc = \(.data) ((.data$value.momentum/100+1)^12-1)*100),
       .options = list(.custom_function="data")) |>
     # In this case it will be same only
