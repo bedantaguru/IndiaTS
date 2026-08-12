@@ -495,7 +495,7 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #' @description
 #' A unified generic entry point to calculate various derived time-series metrics
 #' such as growth rates, momentum, base effects, structural shares, growth contributions,
-#' and deflators. Seamlessly supports both \code{tdf_long} and \code{tdf} formats via S3 dispatch.
+#' and deflators. Seamlessly supports \code{data.frame}, \code{tdf_long}, and \code{tdf} formats via S3 dispatch.
 #'
 #' @details
 #' The calculation engine is driven by a declarative metric registry and a topological
@@ -512,8 +512,8 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #'   functions returning multiple metrics are restricted or not supported for wide \code{tdf} objects.
 #' }
 #'
-#' @param dat A data frame, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
-#' and \code{value.level} columns.
+#' @param dat A \code{data.frame}, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
+#' and \code{value.level} columns. Standard data frames will attempt implicit conversion.
 #'
 #' @param level_lag_n Logical. Compute Previous n-Period Level (Lag). The lag value is defined in \code{.options}.
 #' @param level_lead_n Logical. Compute Next n-Period Level (Lead). The lead value is defined in \code{.options}.
@@ -549,6 +549,7 @@ compute_metrics_engine <- function(dat, requested, registry) {
 #' @param .avoid_during_compute_all Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.
 #' @param .custom_function A function or a named list of functions to apply to the \code{value.level} column. The generated metric will be appended as \code{.value.custom_fn} or \code{.value.<list_name>}.
 #' @param .options A named list of parameters for dynamic metrics. Currently supports \code{level_lag_n} and \code{level_lead_n} integers. Default is \code{list(level_lag_n = 1, level_lead_n = 1)}.
+#' @param .omit_na Logical. Specific to \code{tdf} (wide format) output. If \code{TRUE}, omits \code{NA} values after computing the metric. If \code{NULL} (default), auto-detects based on the original data.
 #' @param ... Additional arguments passed to methods.
 #'
 #' @return Depending on the input class:
@@ -603,10 +604,12 @@ compute_metrics.tdf_long <- function(
     )
 ) {
 
+  # This needs to run before any further variable definition
   all_args <- as.list(environment())
+
   has_deflator <- isTRUE(deflator) || isTRUE(deflator_inflation)
 
-  ignore_args <- c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation", ".custom_function")
+  ignore_args <- c("dat", ".compute_all", ".avoid_during_compute_all", "deflator", "deflator_inflation", ".custom_function",".options")
   standard_args <- all_args[setdiff(names(all_args), ignore_args)]
 
   has_standard <- any(unlist(standard_args) == TRUE) || (isTRUE(.compute_all) && !has_deflator)
@@ -676,9 +679,9 @@ compute_metrics.tdf_long <- function(
 
   if(f_present){
 
-    common_name <- intersect(requested, names(cfs))
+    common_names <- intersect(requested, names(cfs))
 
-    if(length(common_name)>0){
+    if(length(common_names)>0){
       warning(
         paste0(
           "Custom metric names overlap with existing metrics: ",
@@ -749,8 +752,18 @@ compute_metrics.tdf <- function(
     .options = list(
       level_lag_n = 1,
       level_lead_n = 1
-    )
+    ),
+    .omit_na = NULL
 ) {
+
+  # This needs to run before any further variable definition
+  all_args <- as.list(environment())
+
+  if(!is.logical(.omit_na)){
+    dchk <- stats::na.omit(dat)
+    # If main data does not have NA then omit NA otherwise not
+    .omit_na <- NROW(dchk)==NROW(dat)
+  }
 
   f_mode <- is.function(.custom_function)
 
@@ -780,8 +793,8 @@ compute_metrics.tdf <- function(
       })
 
   } else {
-    all_args <- as.list(environment())
-    metric_args <- all_args[setdiff(names(all_args), "dat")]
+
+    metric_args <- all_args[setdiff(names(all_args), c("dat",".custom_function",".options",".omit_na"))]
     requested <- names(metric_args)[unlist(metric_args) == TRUE]
 
     if (length(requested) > 1) {
@@ -795,7 +808,11 @@ compute_metrics.tdf <- function(
   dl <- as_tdf_long(dat)
   dl2 <- compute_metrics_engine(dl, requested, metric_registry_this)
   d2 <- as_tdf(dl2, value_name = requested[1])
-  stats::na.omit(d2)
+  if(.omit_na) {
+    stats::na.omit(d2)
+  } else {
+    d2
+  }
 }
 
 
@@ -870,7 +887,7 @@ stopifnot(
       names(metric_registry)
     ),
   "compute_metrics.tdf args out of sync with metric_registry" =
-    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function",".options")), names(metric_registry))
+    setequal(setdiff(names(formals(compute_metrics.tdf)), c("dat", ".custom_function",".options",".omit_na")), names(metric_registry))
 )
 
 # =============================================================================

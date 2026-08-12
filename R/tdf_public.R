@@ -188,61 +188,119 @@ as_tdf.tdf_long <- function(
 
   # If variation is due to something else apart from names then variation
   # reduction strategy is to be implemented
-  if(length(uchk)>0){
-    d1 <- df |>
-      dplyr::group_by(time, meta.name) |>
-      dplyr::summarise(
-        divergance = round(
-          (max(val_col) - min(val_col))/max(val_col)*100),
-        remarks = paste0(
-          ifelse(
-            dplyr::n_distinct(meta.release_tag)>1,
-            paste0(dplyr::n_distinct(meta.release_tag), " release_tags;"), ""),
-          ifelse(
-            dplyr::n_distinct(meta.price_basis)>1,
-            paste0(dplyr::n_distinct(meta.price_basis), " price_basis;"), ""),
-          ifelse(
-            dplyr::n_distinct(meta.disaggregation_group)>1,
-            paste0(dplyr::n_distinct(meta.disaggregation_group), " disaggregation_group;"), "")
-        ),
-        .groups = "drop") |>
-      dplyr::filter(divergance>divergence_tol_pct)
+  if (length(uchk) > 0) {
 
-    info <- list(
-      rtag = sum(stringr::str_count(d1$remarks, "release_tags")),
-      dgs = sum(stringr::str_count(d1$remarks, "disaggregation_group")),
-      pbs = sum(stringr::str_count(d1$remarks, "price_basis"))
-    )
-
-    # In this case it will start variation reduction strategy
-    if(NROW(d1)>0 && (info$rtag > max(info$dgs, info$pbs))){
-
-      # if release_tag's are sort-able then sort and take latest one
-      rel_tag_flt_cols <- c("meta.release_order","meta.release_date")
-      rel_tag_flt_cols <- colnames(df) |> intersect(rel_tag_flt_cols)
-
-      if(length(rel_tag_flt_cols)>0){
-        # Case when there is order able info for release tags
-        if("meta.release_order" %in% rel_tag_flt_cols){
-          df <- df |>
-            group_by(time, meta.name) |>
-            slice_max(order_by = meta.release_order, n = 1, with_ties = FALSE) %>%
-            ungroup()
-        } else {
-          df <- df |>
-            group_by(time, meta.name) |>
-            slice_max(order_by = meta.release_date, n = 1, with_ties = FALSE) %>%
-            ungroup()
-        }
-      } else {
-        # if release_tag is Non-sort-able then use avg with warning
-        warning("Averaging across variations of the same name. Results may be unexpected. To suppress this warning, use proper inputs instead of mass conversion.", call. = FALSE)
-        df <- df |> group_by(time, meta.name) |> summarise(val_col = mean(val_col, na.rm= TRUE), .groups = "drop")
-      }
-    } else {
-      stop("Unexpected variation found in the data unable to proceed further (maybe filter on meta.price_basis or meta.release_tag) !", call. = FALSE)
+    this_divergence_check <- function(df){
+      d1 <- df |>
+        dplyr::group_by(time, meta.name) |>
+        dplyr::summarise(
+          divergance = round((max(val_col) - min(val_col)) / max(val_col) * 100),
+          remarks = paste0(
+            ifelse(dplyr::n_distinct(meta.release_tag) > 1, paste0(dplyr::n_distinct(meta.release_tag), " release_tags;"), ""),
+            ifelse(dplyr::n_distinct(meta.price_basis) > 1, paste0(dplyr::n_distinct(meta.price_basis), " price_basis;"), ""),
+            ifelse(dplyr::n_distinct(meta.disaggregation_group) > 1, paste0(dplyr::n_distinct(meta.disaggregation_group), " disaggregation_group;"), "")
+          ),
+          .groups = "drop"
+        ) |>
+        dplyr::filter(divergance > divergence_tol_pct)
+      d1
     }
 
+    d1 <- this_divergence_check(df)
+
+    # 1. SCENARIO: All variations are within tolerance
+    if (NROW(d1) == 0) {
+      message("Minor (or NO) variations detected within tolerance (", divergence_tol_pct, "%). Averaging values to resolve duplicates.")
+      df <- df |>
+        dplyr::group_by(time, meta.name) |>
+        dplyr::summarise(val_col = mean(val_col, na.rm = TRUE), .groups = "drop")
+
+      # 2. SCENARIO: High variation, but potentially fixable via release tags
+    } else {
+      info <- list(
+        rtag = sum(stringr::str_count(d1$remarks, "release_tags")),
+        dgs = sum(stringr::str_count(d1$remarks, "disaggregation_group")),
+        pbs = sum(stringr::str_count(d1$remarks, "price_basis"))
+      )
+
+      if (info$rtag > max(info$dgs, info$pbs)) {
+        rel_tag_flt_cols <- c("meta.release_order", "meta.release_date")
+        rel_tag_flt_cols <- intersect(colnames(df), rel_tag_flt_cols)
+
+        if (length(rel_tag_flt_cols) > 0) {
+          if ("meta.release_order" %in% rel_tag_flt_cols) {
+            df <- df |>
+              dplyr::group_by(time, meta.name) |>
+              dplyr::slice_max(order_by = meta.release_order, n = 1, with_ties = FALSE) |>
+              dplyr::ungroup()
+          } else {
+            df <- df |>
+              dplyr::group_by(time, meta.name) |>
+              dplyr::slice_max(order_by = meta.release_date, n = 1, with_ties = FALSE) |>
+              dplyr::ungroup()
+          }
+        } else {
+          # Fallback: Try to uniquely resolve duplicates using the "#main" tag
+          if ("#main" %in% df$meta.release_tag) {
+
+            # Record original number of unique time/meta.name groups
+            n_orig_groups <- df |> dplyr::distinct(time, meta.name) |> nrow()
+
+            df_resolved <- df |>
+              dplyr::group_by(time, meta.name) |>
+              # Keep the row if it's the only one, OR if it's the #main tag
+              dplyr::filter(dplyr::n() == 1 | meta.release_tag == "#main") |>
+              dplyr::ungroup()
+
+            # Validate that the fallback worked perfectly
+            n_new_groups <- df_resolved |> dplyr::distinct(time, meta.name) |> nrow()
+            dups_remain <- df_resolved |>
+              dplyr::group_by(time, meta.name) |>
+              dplyr::tally() |>
+              dplyr::filter(n > 1) |>
+              nrow() > 0
+
+            if(dups_remain){
+              # Again Divergence Test
+              d1_2 <- this_divergence_check(df_resolved)
+              dups_remain <- NROW(d1_2) > 0
+
+              # I think here something needs to add -> Added logic below:
+              if (!dups_remain) {
+                # Duplicates exist among #main tags, but they are within tolerance.
+                # Average them to safely resolve the duplication.
+                message("Multiple '#main' release tags found, but variations are within tolerance. Averaging to resolve.")
+                df_resolved <- df_resolved |>
+                  dplyr::group_by(time, meta.name) |>
+                  dplyr::summarise(val_col = mean(val_col, na.rm = TRUE), .groups = "drop")
+              }
+            }
+
+
+
+            if (n_new_groups == n_orig_groups && !dups_remain) {
+              message("Resolved release_tag variation by falling back to the '#main' tag.")
+              df <- df_resolved
+            } else {
+              stop("High variation due to release_tags. No sortable columns found, and '#main' tag fallback failed (either missing in some duplicated groups or not unique).", call. = FALSE)
+            }
+
+          } else {
+            stop("High variation due to release_tags, but no sortable columns (release_order/release_date) found, and no '#main' tag available to resolve it.", call. = FALSE)
+          }
+        }
+
+        # 3. SCENARIO: High variation due to price basis or disaggregation groups
+      } else {
+        stop(
+          paste0(
+            "Unexpected high variation found in the data (exceeds ", divergence_tol_pct, "% tolerance). Unable to proceed further.\n",
+            "Please filter on meta.price_basis or meta.disaggregation_group.\n",
+            "Cols varying for: ", paste0(uchk, collapse = ", ")
+          ), call. = FALSE
+        )
+      }
+    }
   }
 
   # After this there should be no variation
