@@ -836,72 +836,188 @@ fiscal_year_for_date <- function(date) {
 
 previous_period_for_fiscal_period <- function(
     fp,
-    lag_len = c(
-      "month" = 30,
-      "quarter" = 90,
-      "halfyear" = 182,
-      "year" = 365
-    ),
+    year_lag = FALSE,
     sign = -1
 ) {
-
-  fp_date <- as.Date.fiscal_period(fp, anchor = "mid")
-
-  fqs <- frequency.fiscal_period(fp)
-
-  days_to_subtract <- dplyr::case_when(
-    fqs == "month" ~ as.numeric(lag_len["month"]),
-    fqs == "quarter" ~ as.numeric(lag_len["quarter"]),
-    fqs == "halfyear" ~ as.numeric(lag_len["halfyear"]),
-    fqs == "year" ~ as.numeric(lag_len["year"]),
-    TRUE ~ NA_real_
+  shift_fiscal_period(
+    fp,
+    x = 1*sign,
+    year_shift = year_lag
   )
-
-  this_dates <- fp_date + sign * days_to_subtract
-
-  out <- dplyr::case_when(
-    fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
-    fqs == "quarter" ~ fiscal_quarter_for_date(this_dates, with_year = TRUE),
-    fqs == "halfyear" ~ fiscal_halfyear_for_date(this_dates, with_year = TRUE),
-    fqs == "year" ~ fiscal_year_for_date(this_dates),
-    TRUE ~ NA
-  )
-
-  class(out) <- class(fp)  # preserve class of input
-
-  out
 }
 
 previous_period_for_calendar_period <- function(
     cp,
-    lag_len = c("month" = 30, "quarter" = 90, "year" = 365),
+    year_lag = FALSE,
     sign = -1
 ) {
+  shift_calendar_period(
+    cp,
+    x = 1*sign,
+    year_shift = year_lag
+  )
+}
 
-  cp_date <- as.Date.calendar_period(cp, anchor = "mid")
+
+
+shift_fiscal_period <- function(fp, x, year_shift = FALSE) {
+
+  # Input checks
+  if (!is.numeric(x)) {
+    stop("`x` must be numeric.", call. = FALSE)
+  }
+  if (length(x) != 1L && length(x) != length(fp)) {
+    stop("`x` must have length 1 or the same length as `fp`.", call. = FALSE)
+  }
+
+
+  fqs <- frequency.fiscal_period(fp)
+
+  # Number of calendar months represented by each frequency
+  month_multiplier <- c(
+    month    = 1L,
+    quarter  = 3L,
+    halfyear = 6L,
+    year     = 12L
+  )
+
+  if(year_shift){
+    month_multiplier <- c(
+      month    = 12L,
+      quarter  = 12L,
+      halfyear = 12L,
+      year     = 12L
+    )
+  }
+
+  months_per_period <- unname(month_multiplier[fqs])
+
+  # Check for unsupported frequencies (ignoring legitimate NAs)
+  if (anyNA(months_per_period) && !all(is.na(fqs))) {
+    stop("Unsupported fiscal-period frequency.", call. = FALSE)
+  }
+
+  fp_date <- as.Date.fiscal_period(fp, anchor = "mid")
+
+  # Total calendar-month shift (auto-recycles scalar x)
+  total_months <- as.integer(round(x * months_per_period))
+
+  # Calendar-month arithmetic (Using period() instead of months() avoids base R namespace conflicts)
+  this_dates <- lubridate::add_with_rollback(
+    fp_date,
+    months(total_months)
+  )
+
+  # Initialize empty vector of the identical base type (character/integer)
+  out <- vector(typeof(fp), length(fp))
+
+  # Use which() for NA-safe indexing
+  idx_m <- which(fqs == "month")
+  if (length(idx_m)) {
+    out[idx_m] <- fiscal_month_for_date(this_dates[idx_m], with_year = TRUE)
+  }
+
+  idx_q <- which(fqs == "quarter")
+  if (length(idx_q)) {
+    out[idx_q] <- fiscal_quarter_for_date(this_dates[idx_q], with_year = TRUE)
+  }
+
+  idx_h <- which(fqs == "halfyear")
+  if (length(idx_h)) {
+    out[idx_h] <- fiscal_halfyear_for_date(this_dates[idx_h], with_year = TRUE)
+  }
+
+  idx_y <- which(fqs == "year")
+  if (length(idx_y)) {
+    out[idx_y] <- fiscal_year_for_date(this_dates[idx_y])
+  }
+
+  # Restore ALL attributes (preserves S3 class, names(), and internal structure)
+  attributes(out) <- attributes(fp)
+
+  return(out)
+}
+
+
+shift_calendar_period <- function(cp, x, year_shift = FALSE) {
+
+  # Input checks
+  if (!is.numeric(x)) {
+    stop("`x` must be numeric.", call. = FALSE)
+  }
+
+  if (length(x) != 1L && length(x) != length(cp)) {
+    stop(
+      "`x` must have length 1 or the same length as `cp`.",
+      call. = FALSE
+    )
+  }
 
   fqs <- frequency.calendar_period(cp)
 
-  days_to_subtract <- dplyr::case_when(
-    fqs == "month" ~ as.numeric(lag_len["month"]),
-    fqs == "quarter" ~ as.numeric(lag_len["quarter"]),
-    fqs == "year" ~ as.numeric(lag_len["year"]),
-    TRUE ~ NA_real_
+  # Number of calendar months represented by each frequency
+  month_multiplier <- c(
+    month   = 1L,
+    quarter = 3L,
+    year    = 12L
   )
 
-  this_dates <- cp_date + sign * days_to_subtract
+  if (year_shift) {
+    month_multiplier <- c(
+      month   = 12L,
+      quarter = 12L,
+      year    = 12L
+    )
+  }
 
-  out <- dplyr::case_when(
-    fqs == "month" ~ fiscal_month_for_date(this_dates, with_year = TRUE),
-    fqs == "quarter" ~ calendar_quarter_for_date(this_dates, with_year = TRUE),
-    fqs == "year" ~ as.character(lubridate::year(this_dates)),
-    TRUE ~ NA
+  months_per_period <- unname(month_multiplier[fqs])
+
+  # Check for unsupported frequencies
+  if (anyNA(months_per_period) && !all(is.na(fqs))) {
+    stop("Unsupported calendar-period frequency.", call. = FALSE)
+  }
+
+  cp_date <- as.Date.calendar_period(cp, anchor = "mid")
+
+  # Total calendar-month shift
+  total_months <- as.integer(round(x * months_per_period))
+
+  # Calendar-month arithmetic
+  this_dates <- lubridate::add_with_rollback(
+    cp_date,
+    months(total_months)
   )
 
-  class(out) <- class(cp)  # preserve class of input
+  # Initialize output vector
+  out <- vector(typeof(cp), length(cp))
 
-  out
+  idx_m <- which(fqs == "month")
+  if (length(idx_m)) {
+    out[idx_m] <- fiscal_month_for_date(
+      this_dates[idx_m],
+      with_year = TRUE
+    )
+  }
 
+  idx_q <- which(fqs == "quarter")
+  if (length(idx_q)) {
+    out[idx_q] <- calendar_quarter_for_date(
+      this_dates[idx_q],
+      with_year = TRUE
+    )
+  }
+
+  idx_y <- which(fqs == "year")
+  if (length(idx_y)) {
+    out[idx_y] <- as.character(
+      lubridate::year(this_dates[idx_y])
+    )
+  }
+
+  # Restore all attributes
+  attributes(out) <- attributes(cp)
+
+  return(out)
 }
 
 

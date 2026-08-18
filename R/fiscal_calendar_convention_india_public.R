@@ -1083,9 +1083,9 @@ next_period <- function(x) {
 #' @export
 previous_year <- function(x) {
   if(inherits(x, fiscal_period_class[1])){
-    res <- previous_period_for_fiscal_period(x, lag_len = c("month" = 365, "quarter" = 365, "halfyear" = 365, "year" = 365))
+    res <- previous_period_for_fiscal_period(x, year_lag = TRUE)
   } else if (inherits(x, calendar_period_class[1])) {
-    res <- previous_period_for_calendar_period(x, lag_len = c("month" = 365, "quarter" = 365, "year" = 365))
+    res <- previous_period_for_calendar_period(x, year_lag = TRUE)
   } else {
     stop("Input must be either a fiscal_period or calendar_period vector.", call. = FALSE)
   }
@@ -1138,7 +1138,7 @@ next_year <- function(x) {
 
     res <- previous_period_for_fiscal_period(
       x,
-      lag_len = c("month" = 365, "quarter" = 365, "halfyear" = 365, "year" = 365),
+      year_lag = TRUE,
       sign = +1
     )
 
@@ -1146,7 +1146,7 @@ next_year <- function(x) {
 
     res <- previous_period_for_calendar_period(
       x,
-      lag_len = c("month" = 365, "quarter" = 365, "year" = 365),
+      year_lag = TRUE,
       sign = +1
     )
 
@@ -1195,7 +1195,7 @@ next_year <- function(x) {
 #' is_continuous(x)
 #'
 #' @export
-is_continuous <- function(fp) {
+is_continuous <- function(fp, return_missing = FALSE) {
 
 
   if(!is_period_type(fp)){
@@ -1205,38 +1205,27 @@ is_continuous <- function(fp) {
   freq <- stats::frequency(fp, singular = TRUE)
 
   if(freq == "mixed"){
+    if(return_missing) return(fp)
     return(FALSE)
   }
 
   fp <- unique(fp)
   fp <- sort(fp)
 
-  freq <- stats::frequency(fp, singular = TRUE)
+  mp <- min(fp)
+  Mp <- max(fp)
+  expected_all <- mp + 0:(Mp-mp)
+  this_missing <- expected_all |> setdiff(fp)
 
-  fp_date <- as.Date(fp, anchor = "mid")
-
-  expected_gap <- dplyr::case_when(
-    freq == "month" ~ 30,
-    freq == "quarter" ~ 90,
-    freq == "halfyear" ~ 182,
-    freq == "year" ~ 365,
-    TRUE ~ NA_real_
-  )
-
-  if( is.na(expected_gap))  return(FALSE)
-
-  # Check if gaps between consecutive dates are consistent with expected gap
-
-  gap_chk <- fp_date %>% sort() %>% diff()
-  gap_pct <- gap_chk / expected_gap
-
-  if(any(abs(gap_pct-1) > 0.2)){
-    # allow 20% deviation in gap length to account for varying month lengths, leap years, etc.
+  if(length(this_missing)>0){
+    if(return_missing){
+      return(this_missing)
+    }
     return(FALSE)
   } else {
+    if(return_missing) return(fp[0])
     return(TRUE)
   }
-
 
 }
 
@@ -1616,46 +1605,9 @@ Ops.fiscal_period <- function(e1, e2) {
     num_vec <- (-1) * num_vec
   }
 
-  res <- period_vec
+  # For general case (supports mixed frequency)
 
-  # ---------- Fast path : scalar shift ----------
-  if (n_num == 1) {
-
-    k <- num_vec
-
-    if (k > 0) {
-      for (i in seq_len(k)) {
-        res <- next_period(res)
-      }
-    } else if (k < 0) {
-      for (i in seq_len(abs(k))) {
-        res <- previous_period(res)
-      }
-    }
-
-  } else {
-
-    # ---------- Element-wise case ----------
-    for (i in seq_len(n_period)) {
-
-      k <- num_vec[i]
-
-      tmp <- period_vec[i]
-
-      if (k > 0) {
-        for (j in seq_len(k)) {
-          tmp <- next_period(tmp)
-        }
-      } else if (k < 0) {
-        for (j in seq_len(abs(k))) {
-          tmp <- previous_period(tmp)
-        }
-      }
-
-      res[i] <- tmp
-    }
-
-  }
+  res <- period_vec |> shift_fiscal_period(x = num_vec)
 
   class(res) <- class(period_vec)
 
@@ -1706,6 +1658,38 @@ Ops.calendar_period <- function(e1, e2) {
 
   e1_is_num <- is.numeric(e1)
   e2_is_num <- is.numeric(e2)
+
+  # Specific case of subtract
+  if((e1_is_period && e2_is_period) && (op == "-")) {
+
+    doable <- FALSE
+
+    if(length(e1)==1 || length(e2)==1){
+      doable <- TRUE
+    }
+
+    if(length(e1) == length(e2)){
+      doable <- TRUE
+    }
+
+    if(doable){
+      if(frequency.calendar_period(e1, singular = TRUE)!= frequency.calendar_period(e2, singular = TRUE)) {
+        doable <- FALSE
+      }
+    }
+
+    if(doable){
+
+      fq <- frequency.calendar_period(e1, singular = TRUE)
+      dif <- difftime(as.Date(e1), as.Date(e2), units = "days") |> as.numeric()
+      u <- freq_info_for_one_freq(fq)
+      return(as.integer(round(dif/(365/u$unit))))
+
+    } else {
+      stop("Subtraction requires the two elements to have the same frequency and either equal lengths or one element of length 1.", call. = FALSE)
+    }
+
+  }
 
   if (e1_is_period && e2_is_period) {
     stop("Operation between two calendar_period objects is not supported.", call. = FALSE)
@@ -1762,46 +1746,7 @@ Ops.calendar_period <- function(e1, e2) {
     num_vec <- (-1) * num_vec
   }
 
-  res <- period_vec
-
-  # ---------- Fast path : scalar shift ----------
-  if (n_num == 1) {
-
-    k <- num_vec
-
-    if (k > 0) {
-      for (i in seq_len(k)) {
-        res <- next_period(res)
-      }
-    } else if (k < 0) {
-      for (i in seq_len(abs(k))) {
-        res <- previous_period(res)
-      }
-    }
-
-  } else {
-
-    # ---------- Element-wise case ----------
-    for (i in seq_len(n_period)) {
-
-      k <- num_vec[i]
-
-      tmp <- period_vec[i]
-
-      if (k > 0) {
-        for (j in seq_len(k)) {
-          tmp <- next_period(tmp)
-        }
-      } else if (k < 0) {
-        for (j in seq_len(abs(k))) {
-          tmp <- previous_period(tmp)
-        }
-      }
-
-      res[i] <- tmp
-    }
-
-  }
+  res <- period_vec |> shift_calendar_period(x = num_vec)
 
   class(res) <- class(period_vec)
 
