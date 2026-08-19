@@ -58,6 +58,82 @@ splice_series.tdf_long_list <- function(
     target_price_basis = NULL,
     mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
 
+  n_pbase <- length(unique(tdl$data$meta.price_basis))
+
+  if (n_pbase < 2) {
+    stop("Fewer than two price bases found. Nothing to link.",
+         call. = FALSE)
+  }
+
+  if (n_pbase > 2) {
+    message("Multiple price bases found. Applying chain-linking splicing.")
+    sp_out <- splice_series_for_multi_pbase(
+      tdl = tdl, target_price_basis = target_price_basis, mean_type = mean_type, ...)
+  }
+
+  if (n_pbase == 2) {
+    sp_out <- splice_series_core_for_two_pbase(
+      tdl = tdl,
+      target_price_basis = target_price_basis,
+      mean_type = mean_type,
+      return_diagnostics = return_diagnostics,
+      ...
+    )
+  }
+
+  sp_out
+
+}
+
+
+
+splice_helper_match_price_basis <- function(target_price_basis, pbs_to_match) {
+
+  if (length(target_price_basis) != 1L) {
+    stop(
+      "`target_price_basis` must be scalar.",
+      call. = FALSE
+    )
+  }
+
+  if (!length(pbs_to_match)) {
+    return(target_price_basis)
+  }
+
+  # Check whether PTXQC is installed, without loading it
+  has_PTXQC <- any(
+    file.exists(
+      file.path(.libPaths(), "PTXQC")
+    )
+  )
+
+  match_measure <- function(x, y) {
+    if (has_PTXQC) {
+      purrr::map_int(
+        x,
+        \(z) PTXQC::LCS(z, y) |> nchar()
+      )
+    } else {
+      stringr::str_detect(
+        x,
+        stringr::fixed(y)
+      ) |> as.numeric()
+    }
+  }
+
+  try_match <- dplyr::tibble(
+    pb = pbs_to_match,
+    m = match_measure(pbs_to_match, target_price_basis)
+  )
+
+  try_match$pb[which.max(try_match$m)][1L]
+}
+
+splice_series_core_for_two_pbase <- function(
+    tdl,
+    target_price_basis = NULL,
+    mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
+
   # Match the mean_type argument, defaulting to the first option ("auto")
   mean_type <- match.arg(mean_type)
 
@@ -87,28 +163,8 @@ splice_series.tdf_long_list <- function(
     target_price_basis <- px[1]
   }
 
-  if(!(target_price_basis %in% pbs$meta.price_basis)){
-    # Try to auto match (based on string matching)
-    if(length(target_price_basis)!=1) stop("Not scalar entry for target_price_basis!", call. = FALSE)
-    pbs_to_match <- unique(pbs$meta.price_basis)
-    if_there_PTXQC <- any(file.exists(file.path(.libPaths(), "PTXQC")))
-
-    # x vector and y scalar
-    match_measure <- function(x, y){
-      if(if_there_PTXQC){
-        x |> purrr::map_int(~PTXQC::LCS(.x, y) |> nchar())
-      } else {
-        stringr::str_detect(x, y) |> as.numeric()
-      }
-    }
-
-    try_match <- dplyr::tibble(
-      pb = pbs_to_match,
-      m = match_measure(pb, target_price_basis)
-    )
-
-    target_price_basis <- try_match$pb[which.max(try_match$m)][1]
-  }
+  target_price_basis <- splice_helper_match_price_basis(
+    target_price_basis, unique(pbs$meta.price_basis))
 
   series_in_tar <- td %>% filter(meta.price_basis == target_price_basis) %>%
     select(time, meta.release_tag,
@@ -149,7 +205,7 @@ splice_series.tdf_long_list <- function(
   }
 
   # Helper function to dynamically calculate mean based on the vector's values
-  aggregate_fn <- function(x) {
+  aggregate_fn <- function(x, trim_frac = 0.1) {
     x <- x[!is.na(x)]
     if(length(x)==0) return(NA)
 
@@ -159,10 +215,18 @@ splice_series.tdf_long_list <- function(
     }
 
     if (mt == "GM") {
-      exp(mean(log(x)))
+      exp(mean(log(x), trim = trim_frac, na.rm = TRUE))
     } else {
-      mean(x)
+      mean(x, trim = trim_frac, na.rm = TRUE)
     }
+  }
+
+
+  safe_ndiff <- function(x){
+    tryCatch(
+      forecast::ndiffs(x),
+      error = function(e) NA_integer_
+    )
   }
 
   ## avg_linking_factor
@@ -173,9 +237,20 @@ splice_series.tdf_long_list <- function(
     ) %>%
     summarise(
       avg_linking_factor = aggregate_fn(linking_factor),
-      qd_linking_factor = quartile_deviation(linking_factor), .groups = "drop")
+      qd_linking_factor = quartile_deviation(linking_factor),
+      integration_order = safe_ndiff(linking_factor), .groups = "drop")
 
   # more less this number is that good the series is : mean(cx$qd_linking_factor)
+
+  non_I0_series <- cx |> dplyr::filter(integration_order>0) |> dplyr::pull(meta.name) |> unique()
+
+  if(length(non_I0_series)>0){
+    message(
+      paste0("Presence of non-I(0) linking factor found in: ",
+             paste0(non_I0_series, collapse = ", "),
+             ". Simple splicing may not be adequate.")
+    )
+  }
 
   # many release vintage will not get any value so extending cx
   cx_ext <- cx %>%
@@ -251,3 +326,78 @@ splice_series.tdf_long_list <- function(
   tdl_out
 
 }
+
+splice_series_for_multi_pbase <- function(
+    tdl,
+    target_price_basis = NULL,
+    mean_type = c("auto", "GM", "AM"), return_diagnostics = FALSE, ...){
+
+  step1 <- splice_series_for_multi_pbase_part(
+    tdl = tdl, mean_type = mean_type, ...)
+
+  if(is.null(target_price_basis)){
+    return(step1)
+  }
+
+  if(target_price_basis == step1$data$meta.price_basis[1]){
+    return(step1)
+  }
+
+  # Proceed further for target_price_basis no NULL case and  not recent one
+
+  target_price_basis <- splice_helper_match_price_basis(
+    target_price_basis, unique(tdl$data$meta.price_basis))
+
+  new_tdl <- tdl
+
+  new_tdl$data <- dplyr::bind_rows(
+    new_tdl$data |> dplyr::filter(meta.price_basis == target_price_basis),
+    step1$data
+  )
+
+  step2 <- splice_series_core_for_two_pbase(
+    new_tdl,
+    target_price_basis = target_price_basis, mean_type = mean_type, ...)
+
+  step2
+
+}
+
+splice_series_for_multi_pbase_part <- function(
+    tdl,
+    # target_price_basis has to be max pbase (NULL)
+    mean_type = c("auto", "GM", "AM"), ...) {
+
+  pbs <- unique(tdl$data$meta.price_basis) |> sort()
+  pbs_d <- dplyr::tibble(from = pbs[-length(pbs)], to = pbs[-1])
+
+  tdld_now <- tdl$data |> dplyr::filter(FALSE)
+
+  for(i in 1:NROW(pbs_d)){
+    target <- pbs_d[i,]
+
+    tdld_this <- dplyr::bind_rows(tdl$data, tdld_now) |>
+      dplyr::filter(meta.price_basis %in% c(target$to, target$from)) |>
+      dplyr::distinct()
+
+    tdld_this_spl <- splice_series_core_for_two_pbase(
+      tdf_long_make(tdld_this, tdl$hmap, minimal = TRUE),
+      target_price_basis = target$to,
+      mean_type = mean_type,
+      ...
+    )
+
+    # Check identical(unique(tdld_this_spl$data$time) |> sort(), unique(tdld_this$time) |> sort())
+
+    tdld_now <- tdld_this_spl$data[colnames(tdld_now)]
+  }
+
+  tdl_out <- tdl
+
+  tdl_out$data <- tdld_now
+
+  tdf_long_check_structure(tdl_out)
+
+  tdl_out
+}
+

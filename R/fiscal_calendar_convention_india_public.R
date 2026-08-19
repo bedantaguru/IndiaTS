@@ -1165,34 +1165,46 @@ next_year <- function(x) {
 
 #' Check whether a period vector is continuous
 #'
-#' Determines whether a vector of calendar or fiscal periods represents a
-#' continuous sequence with no missing gaps, allowing for reasonable variation
-#' in period lengths.
+#' Determines whether a vector of calendar or fiscal periods forms a continuous
+#' sequence with no missing periods.
 #'
-#' Continuity is evaluated by converting periods to mid-point dates and checking
-#' whether the gaps between consecutive periods are consistent with the expected
-#' spacing implied by the period frequency.
+#' Continuity is assessed using the period's natural sequential ordering. The
+#' input does not need to be ordered, and duplicate periods are ignored.
 #'
 #' Supported frequencies are month, quarter, half-year, and year. Mixed
 #' frequencies are treated as non-continuous.
 #'
 #' @param fp A vector inheriting from a recognized period class
 #'   (calendar or fiscal).
+#' @param return_missing Logical. If \code{FALSE} (default), returns a logical
+#'   scalar indicating whether the periods are continuous. If \code{TRUE},
+#'   returns the missing periods. For a continuous sequence, an empty vector
+#'   of the same period type as \code{fp} is returned. For mixed frequencies,
+#'   the input \code{fp} is returned.
 #'
-#' @return Logical scalar. \code{TRUE} if the periods form a continuous sequence,
-#'   otherwise \code{FALSE}.
+#' @return If \code{return_missing = FALSE}, a logical scalar:
+#'   \code{TRUE} if the periods form a continuous sequence and \code{FALSE}
+#'   otherwise. If \code{return_missing = TRUE}, returns the periods missing
+#'   from the sequence between the minimum and maximum periods.
 #'
 #' @details
-#' A tolerance of 20 percent is allowed when comparing observed gaps to expected
-#' gaps in order to account for varying month lengths, leap years, and calendar
-#' irregularities.
+#' The function first verifies that \code{fp} is a recognized period type and
+#' determines its frequency. Mixed-frequency vectors cannot be assessed for
+#' continuity and are therefore treated as non-continuous.
 #'
-#' The input does not need to be ordered; periods are sorted internally before
-#' continuity is assessed.
+#' Duplicate periods are removed and the remaining periods are sorted before
+#' continuity is assessed. The complete sequence from the minimum to the
+#' maximum period is then generated using the period's natural increment, and
+#' the observed periods are compared with this sequence.
 #'
 #' @examples
 #' x <- as_calendar_period(c("Jan 2020", "Feb 2020", "Mar 2020"))
 #' is_continuous(x)
+#'
+#' x <- as_calendar_period(c("Jan 2020", "Mar 2020"))
+#' is_continuous(x)
+#'
+#' is_continuous(x, return_missing = TRUE)
 #'
 #' @export
 is_continuous <- function(fp, return_missing = FALSE) {

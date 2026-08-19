@@ -177,7 +177,7 @@ fiscal_month_for_date <- function(date, with_year = TRUE){
   if(with_year){
     format(date,"%b:%Y")
   }else{
-    format(date,"%m")
+    format(date,"%m") |> as.integer() |> as.character()
   }
 
 }
@@ -186,7 +186,7 @@ fiscal_month_for_txt <- function(txt, with_year = TRUE) {
   if(with_year){
     extract_month(txt)
   } else {
-    extract_month_only(txt)
+    extract_month_only(txt) |> as.integer() |> as.character()
   }
 }
 

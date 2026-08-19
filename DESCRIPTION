@@ -34,7 +34,8 @@ Imports:
     seasonal,
     vctrs,
     magrittr,
-    janitor
+    janitor,
+    forecast
 Suggests:
     PTXQC,
     testthat (>= 3.0.0)
