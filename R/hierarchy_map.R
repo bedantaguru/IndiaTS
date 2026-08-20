@@ -27,6 +27,12 @@
 #'   or a named list of formulas to merge into `hmap`.
 #' @param set A data frame that completely replaces the existing `hmap`.
 #' @param compact Logical. Compact `tdl` and `hmap` by removing unmapped data.
+#' @param prune_data Logical. Reduce the `tdl` data frame to the bare minimum observations
+#'   (lowest waterfall rank) required to aggregate up to main figures without redundancy.
+#' @param sync_data Logical. Aggregate and populate all disaggregation layers across
+#'   the hierarchy using existing base components.
+#' @param resync_data Logical. Perform a complete data reset by first pruning
+#'   (`prune_data = TRUE`) and then recalculating all layers (`sync_data = TRUE`).
 #' @param ... Operation-specific arguments passed to underlying child functions.
 #'   For `retrieve_weight`: `allow_discrepancy` (allow an OLS intercept),
 #'   `rescale` (rescale weights to sum to 1), and `force` (continue when individual
@@ -37,7 +43,8 @@
 #' **Operation Priority:**
 #' `hmap()` evaluates exactly one operation per call in this priority order:
 #' `weight` > `retrieve_weight` > `add_weight` > `get_stat` >
-#' `detect_disaggregation_group` > `add` > `set` > `compact`.
+#' `detect_disaggregation_group` > `add` > `set` > `compact` >
+#' `prune_data` > `sync_data` > `resync_data`.
 #' If no operation is requested, it returns the raw hierarchy map attached to `tdl`.
 #'
 #' **Formula-Based Additions (`add`):**
@@ -66,6 +73,10 @@
 #'   By default (`data_filter = TRUE`), orphaned data in `tdl` is dropped (and throws
 #'   an error if all data is removed). If you set it to `FALSE`, the map is compacted
 #'   but the original unmapped data is retained in `tdl`.
+#' * **Data Syncing & Pruning:** `prune_data` strips the dataset down to the most
+#'   granular layer necessary to rebuild the hierarchy. `sync_data` performs the opposite,
+#'   calculating and filling in values for all upper disaggregation layers. `resync_data`
+#'   safely combines both to refresh the entire dataset.
 #'
 #' @return
 #' Polymorphic output based on the requested operation:
@@ -74,7 +85,7 @@
 #'   \item **`weight` / `retrieve_weight`:** A data frame of current or estimated weights.
 #'   \item **`get_stat`:** A list containing `from_to_map` and `waterfalls`.
 #'   \item **`detect_disaggregation_group`:** Character string of the best-matching group.
-#'   \item **`add_weight` / `add` / `set` / `compact`:** The modified `tdl` object.
+#'   \item **`add_weight` / `add` / `set` / `compact` / `prune_data` / `sync_data` / `resync_data`:** The modified `tdl` object.
 #' }
 #'
 #' @export
@@ -83,6 +94,7 @@ hmap <- function(
     weight = FALSE, retrieve_weight = FALSE, add_weight = NULL,
     get_stat = FALSE, detect_disaggregation_group = NULL,
     add = NULL, set = NULL, compact = FALSE,
+    prune_data = FALSE, sync_data = FALSE, resync_data = FALSE,
     ...){
 
   # Get Hmap
@@ -152,6 +164,19 @@ hmap <- function(
       hmap_compact(tdl, ...)
     )
   }
+
+  if(prune_data){
+    return(hmap_prune_data(tdl))
+  }
+
+  if(sync_data){
+    return(hmap_sync_data(tdl))
+  }
+
+  if(resync_data){
+    return(hmap_resync_data(tdl))
+  }
+
 
   hm
 }
@@ -742,4 +767,46 @@ hmap_add_on_tdf_long_from_formula <- function(tdl, fin){
   tdl_out
 
 }
+
+
+hmap_prune_data <- function(tdl){
+
+  # Prune to bare minimum to add up to main figures
+
+  hm <- attr(tdl, "hmap")
+  hs <- hmap_get_stats(hm)
+
+  dgs <- tdl$meta.disaggregation_group |> unique()
+
+  dg_rnk <- dgs |> purrr::map_int(\(dg){
+    wfs <- hs$waterfalls
+    min(wfs |> purrr::map(~which(.x == dg)) |> unlist())
+  })
+
+  dgt <- dplyr::tibble(
+    meta.disaggregation_group = dgs,
+    meta.disaggregation_group_rank = dg_rnk
+  )
+
+  tdl2 <- tdl |> dplyr::left_join(dgt, by = "meta.disaggregation_group")
+
+  tdl2 <- tdl2 |> dplyr::group_by(time, meta.release_tag, meta.price_basis) |>
+    dplyr::filter(meta.disaggregation_group_rank == min(meta.disaggregation_group_rank))
+
+  tdl2$meta.disaggregation_group_rank <- NULL
+
+  tdl2
+}
+
+hmap_sync_data <- function(tdl){
+  # Create all disaggregation layer values.
+  aggregate(tdl, type = "component")
+}
+
+hmap_resync_data <- function(tdl){
+  hmap_prune_data(tdl)
+  hmap_sync_data(tdl)
+}
+
+
 

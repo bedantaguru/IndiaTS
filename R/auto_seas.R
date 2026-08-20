@@ -455,7 +455,7 @@ auto_seas_quarterly_series <- function(tdf, attach_diagnostic = FALSE, SEATS = F
 #' must resolve to either \code{"month"} or \code{"quarter"}. Any other
 #' value (including \code{NA} or unrecognised strings) triggers an error.
 #'
-#' @export
+#' @keywords internal
 auto_seas <- function(tdf, alpha = 0.05, attach_diagnostic = FALSE, SEATS = FALSE) {
   fq <- frequency(tdf)
 

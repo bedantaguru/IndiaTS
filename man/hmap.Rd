@@ -14,6 +14,9 @@ hmap(
   add = NULL,
   set = NULL,
   compact = FALSE,
+  prune_data = FALSE,
+  sync_data = FALSE,
+  resync_data = FALSE,
   ...
 )
 }
@@ -42,6 +45,15 @@ or a named list of formulas to merge into \code{hmap}.}
 
 \item{compact}{Logical. Compact \code{tdl} and \code{hmap} by removing unmapped data.}
 
+\item{prune_data}{Logical. Reduce the \code{tdl} data frame to the bare minimum observations
+(lowest waterfall rank) required to aggregate up to main figures without redundancy.}
+
+\item{sync_data}{Logical. Aggregate and populate all disaggregation layers across
+the hierarchy using existing base components.}
+
+\item{resync_data}{Logical. Perform a complete data reset by first pruning
+(\code{prune_data = TRUE}) and then recalculating all layers (\code{sync_data = TRUE}).}
+
 \item{...}{Operation-specific arguments passed to underlying child functions.
 For \code{retrieve_weight}: \code{allow_discrepancy} (allow an OLS intercept),
 \code{rescale} (rescale weights to sum to 1), and \code{force} (continue when individual
@@ -55,7 +67,7 @@ Polymorphic output based on the requested operation:
 \item \strong{\code{weight} / \code{retrieve_weight}:} A data frame of current or estimated weights.
 \item \strong{\code{get_stat}:} A list containing \code{from_to_map} and \code{waterfalls}.
 \item \strong{\code{detect_disaggregation_group}:} Character string of the best-matching group.
-\item \strong{\code{add_weight} / \code{add} / \code{set} / \code{compact}:} The modified \code{tdl} object.
+\item \strong{\code{add_weight} / \code{add} / \code{set} / \code{compact} / \code{prune_data} / \code{sync_data} / \code{resync_data}:} The modified \code{tdl} object.
 }
 }
 \description{
@@ -68,7 +80,8 @@ disaggregation groups, or modify/compact the hierarchy.
 \strong{Operation Priority:}
 \code{hmap()} evaluates exactly one operation per call in this priority order:
 \code{weight} > \code{retrieve_weight} > \code{add_weight} > \code{get_stat} >
-\code{detect_disaggregation_group} > \code{add} > \code{set} > \code{compact}.
+\code{detect_disaggregation_group} > \code{add} > \code{set} > \code{compact} >
+\code{prune_data} > \code{sync_data} > \code{resync_data}.
 If no operation is requested, it returns the raw hierarchy map attached to \code{tdl}.
 
 \strong{Formula-Based Additions (\code{add}):}
@@ -98,5 +111,9 @@ traverse aggregation relationships.
 By default (\code{data_filter = TRUE}), orphaned data in \code{tdl} is dropped (and throws
 an error if all data is removed). If you set it to \code{FALSE}, the map is compacted
 but the original unmapped data is retained in \code{tdl}.
+\item \strong{Data Syncing & Pruning:} \code{prune_data} strips the dataset down to the most
+granular layer necessary to rebuild the hierarchy. \code{sync_data} performs the opposite,
+calculating and filling in values for all upper disaggregation layers. \code{resync_data}
+safely combines both to refresh the entire dataset.
 }
 }

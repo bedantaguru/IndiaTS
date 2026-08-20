@@ -172,3 +172,51 @@ test_that("hmap args works", {
   )
 
 })
+
+
+test_that("hmap prune resync and sync works", {
+
+  g <- test_path("testdata", "gva_annual_tdl_main_real.rds") |> readRDS()
+
+  g2 <- g |> aggregate(type = "component")
+
+  # Normally aggregate component does not affect values
+  expect_equal(
+    mean(g$value.level)/sd(g$value.level),
+    mean(g2$value.level)/sd(g2$value.level)
+  )
+
+  g3 <- g |> hmap(prune_data = TRUE)
+
+  expect_equal(
+    unique(g3$meta.disaggregation_group) |> sort(),
+    c("early_industry", "sub_industry", "sub_industry_legacy")
+  )
+
+  g4 <- hmap(g3, resync_data = TRUE)
+
+  expect_equal(NROW(g4), NROW(g2))
+
+  expect_failure(
+    expect_equal(
+      mean(g$value.level)/sd(g$value.level),
+      mean(g4$value.level)/sd(g4$value.level)
+    )
+  )
+
+  chk_val <- (mean(g$value.level)/sd(g$value.level))/(mean(g4$value.level)/sd(g4$value.level))
+
+  # Not Too much variation
+  expect_true(
+    chk_val< 1.1 & chk_val > 0.9
+  )
+
+  chk_val <- (mean(g$value.level))/(mean(g4$value.level))
+
+  # Not Too much variation
+  expect_true(
+    chk_val< 1.1 & chk_val > 0.9
+  )
+
+
+})

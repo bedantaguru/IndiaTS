@@ -68,3 +68,4 @@ must resolve to either \code{"month"} or \code{"quarter"}. Any other
 value (including \code{NA} or unrecognised strings) triggers an error.
 }
 
+\keyword{internal}
