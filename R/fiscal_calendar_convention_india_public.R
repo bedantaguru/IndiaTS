@@ -1438,6 +1438,13 @@ Ops.fiscal_period <- function(e1, e2) {
 
   op <- .Generic
 
+  # Normally rest of the function assumes e1 is period_type But in case user gives other-side then swap them
+  if(is_period_type(e2) & !is_period_type(e1)){
+    swp <- e2
+    e2 <- e1
+    e1 <- swp
+  }
+
   # 1. Handle Relational (Comparison) Operators using as.Date
   relational_ops <- c("==", "!=", "<", "<=", ">", ">=")
   if (op %in% relational_ops) {
