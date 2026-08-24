@@ -6,7 +6,43 @@
 \alias{compute_metric.tdf}
 \title{Compute Derived Time-Series Metrics}
 \usage{
-compute_metric(dat, ...)
+compute_metric(
+  dat,
+  level_lag_n = FALSE,
+  level_lead_n = FALSE,
+  level_prev_prd = FALSE,
+  level_prev_year = FALSE,
+  growth_rate = FALSE,
+  momentum = FALSE,
+  ln_growth_rate = FALSE,
+  ln_momentum = FALSE,
+  base_effect = FALSE,
+  ln_base_effect = FALSE,
+  growth_rate_prev_prd = FALSE,
+  ln_growth_rate_prev_prd = FALSE,
+  delta_growth_rate = FALSE,
+  delta_ln_growth_rate = FALSE,
+  level_parent = FALSE,
+  share_pct = FALSE,
+  share_prev_prd = FALSE,
+  share_prev_year = FALSE,
+  contribution_growth_rate = FALSE,
+  contribution_momentum = FALSE,
+  contribution_growth_rate_pct = FALSE,
+  contribution_momentum_pct = FALSE,
+  annual_contribution = FALSE,
+  SA = FALSE,
+  seasonally_adjusted = FALSE,
+  SAAR = FALSE,
+  deflator = FALSE,
+  deflator_inflation = FALSE,
+  .compute_all = FALSE,
+  .avoid_during_compute_all = "Seasonal",
+  .custom_function = NULL,
+  .options = list(level_lag_n = 1, level_lead_n = 1, .custom_function = c("on_level",
+    "data")),
+  ...
+)
 
 \method{compute_metric}{tdf_long}(
   dat,
@@ -74,19 +110,22 @@ compute_metric(dat, ...)
   seasonally_adjusted = FALSE,
   SAAR = FALSE,
   .custom_function = NULL,
-  .options = list(level_lag_n = 1, level_lead_n = 1),
+  .options = list(level_lag_n = 1, level_lead_n = 1, .custom_function = c("on_level",
+    "data")),
   .omit_na = NULL
 )
 }
 \arguments{
-\item{dat}{A \code{data.frame}, \code{tdf_long}, or \code{tdf} object. Must contain at least \code{time}
-and \code{value.level} columns. Standard data frames will attempt implicit conversion.}
+\item{dat}{A \code{data.frame}, \code{tdf_long}, or \code{tdf} object.
+Must contain at least \code{time} and \code{value.level} columns.
+Standard data frames are checked for compatibility with \code{tdf_long}
+or \code{tdf} and converted internally when possible.}
 
-\item{...}{Additional arguments passed to methods.}
+\item{level_lag_n}{Logical. Compute Previous n-Period Level (Lag).
+The lag value is specified in \code{.options}.}
 
-\item{level_lag_n}{Logical. Compute Previous n-Period Level (Lag). The lag value is defined in \code{.options}.}
-
-\item{level_lead_n}{Logical. Compute Next n-Period Level (Lead). The lead value is defined in \code{.options}.}
+\item{level_lead_n}{Logical. Compute Next n-Period Level (Lead).
+The lead value is specified in \code{.options}.}
 
 \item{level_prev_prd}{Logical. Compute Previous Period Level.}
 
@@ -112,68 +151,117 @@ and \code{value.level} columns. Standard data frames will attempt implicit conve
 
 \item{delta_ln_growth_rate}{Logical. Compute Delta Log Growth.}
 
-\item{level_parent}{Logical. Compute Parent Level. Requires \code{meta.parent} hierarchy columns.}
+\item{level_parent}{Logical. Compute Parent Level. Requires
+\code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{share_pct}{Logical. Compute Share (\%). Requires \code{meta.parent} hierarchy columns.}
+\item{share_pct}{Logical. Compute Share (\\%). Requires
+\code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{share_prev_prd}{Logical. Compute Previous Period Share. Requires \code{meta.parent} hierarchy columns.}
+\item{share_prev_prd}{Logical. Compute Previous Period Share. Requires
+\code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{share_prev_year}{Logical. Compute Previous Year Share. Requires \code{meta.parent} hierarchy columns.}
+\item{share_prev_year}{Logical. Compute Previous Year Share. Requires
+\code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{contribution_growth_rate}{Logical. Compute Growth Contribution. Requires \code{meta.parent} hierarchy columns.}
+\item{contribution_growth_rate}{Logical. Compute Growth Contribution.
+Requires \code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{contribution_momentum}{Logical. Compute Momentum Contribution. Requires \code{meta.parent} hierarchy columns.}
+\item{contribution_momentum}{Logical. Compute Momentum Contribution.
+Requires \code{meta.parent} and \code{meta.parent_disaggregation_group}.}
 
-\item{contribution_growth_rate_pct}{Logical. Compute Relative Growth Contribution (\%). Requires \code{meta.parent} hierarchy columns.}
+\item{contribution_growth_rate_pct}{Logical. Compute Relative Growth
+Contribution (\\%). Requires \code{meta.parent} and
+\code{meta.parent_disaggregation_group}.}
 
-\item{contribution_momentum_pct}{Logical. Compute Relative Momentum Contribution (\%). Requires \code{meta.parent} hierarchy columns.}
+\item{contribution_momentum_pct}{Logical. Compute Relative Momentum
+Contribution (\\%). Requires \code{meta.parent} and
+\code{meta.parent_disaggregation_group}.}
 
 \item{annual_contribution}{Logical. Compute Annual Contribution.}
 
-\item{SA}{Logical. Compute Seasonal Adjustment. Requires quarterly or monthly frequency.}
+\item{SA}{Logical. Compute Seasonal Adjustment. Supported for quarterly
+and monthly data.}
 
-\item{seasonally_adjusted}{Logical. Compute Seasonally Adjusted Level. Requires quarterly or monthly frequency.}
+\item{seasonally_adjusted}{Logical. Compute Seasonally Adjusted Level.
+Supported for quarterly and monthly data.}
 
-\item{SAAR}{Logical. Compute SAAR (Seasonally Adjusted Annual Rate). Requires quarterly or monthly frequency.}
+\item{SAAR}{Logical. Compute SAAR (Seasonally Adjusted Annual Rate).
+Supported for quarterly and monthly data.}
 
-\item{deflator}{Logical. Compute the Implicit Price Deflator. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.}
+\item{deflator}{Logical. Compute the Implicit Price Deflator. Requires
+matching real and nominal series in \code{meta.price_basis}.}
 
-\item{deflator_inflation}{Logical. Compute Deflator Inflation. Requires matching "real" and "nominal" pairs in \code{meta.price_basis}.}
+\item{deflator_inflation}{Logical. Compute Deflator Inflation. Requires
+matching real and nominal series in \code{meta.price_basis}.}
 
-\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all available standard metrics (or all deflator metrics if a deflator flag is triggered). Default is \code{FALSE}.}
+\item{.compute_all}{Logical. If \code{TRUE}, automatically computes all
+available metrics in the selected metric family. Standard metrics are
+computed when no deflator metric is requested; deflator metrics are
+computed when \code{deflator} or \code{deflator_inflation} is requested.
+Default is \code{FALSE}.}
 
-\item{.avoid_during_compute_all}{Character vector. Categories of metrics to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"} due to computational intensity.}
+\item{.avoid_during_compute_all}{Character vector. Categories of metrics
+to exclude when \code{.compute_all = TRUE}. Defaults to \code{"Seasonal"}.}
 
-\item{.custom_function}{A function or a named list of functions to apply to the \code{value.level} column. The generated metric will be appended as \code{.value.custom_fn} or \code{.value.<list_name>}.}
+\item{.custom_function}{A function or a named list of functions defining
+custom metrics. By default, each function is applied to the
+\code{value.level} vector. When \code{.options$.custom_function = "data"},
+the function receives the complete data passed to the metric engine.
+For named lists, each name is used as the suffix of the generated
+\code{value.*} column.}
 
-\item{.options}{A named list of parameters for dynamic metrics. Currently supports \code{level_lag_n} and \code{level_lead_n} integers. Default is \code{list(level_lag_n = 1, level_lead_n = 1)}.}
+\item{.options}{A named list of options controlling dynamic metrics and
+custom functions. \code{level_lag_n} and \code{level_lead_n} specify the
+lag and lead lengths, respectively. \code{.custom_function} specifies how
+\code{.custom_function} is evaluated and must be either \code{"on_level"}
+or \code{"data"}. Default is
+\code{list(level_lag_n = 1, level_lead_n = 1,
+.custom_function = c("on_level", "data"))}.}
 
-\item{.omit_na}{Logical. Specific to \code{tdf} (wide format) output. If \code{TRUE}, omits \code{NA} values after computing the metric. If \code{NULL} (default), auto-detects based on the original data.}
+\item{...}{Additional arguments passed to the dispatched S3 method.}
+
+\item{.omit_na}{Logical. Used only for wide \code{tdf} output. If
+\code{TRUE}, omits \code{NA} values after computing the metric. If
+\code{NULL}, the default, the behaviour is determined automatically from
+the original data.}
 }
 \value{
 Depending on the input class:
 \itemize{
-\item For \code{tdf_long} or \code{data.frame}: The input data with newly appended columns for each requested metric, prefixed with \code{.value.} (e.g., \code{.value.growth_rate}).
-\item For \code{tdf}: A \code{tdf} object containing the single calculated metric in its wide format.
+\item For \code{tdf_long}: The input data with newly appended
+\code{.value.*} columns for the requested metrics.
+\item For \code{data.frame}: The input data with computed metric
+columns appended and its original class and attributes restored.
+\item For \code{tdf}: A \code{tdf} object containing the calculated
+metric in wide format. Wide \code{tdf} input supports at most one metric
+per call.
 }
 }
 \description{
-A unified generic entry point to calculate various derived time-series metrics
-such as growth rates, momentum, base effects, structural shares, growth contributions,
-and deflators. Seamlessly supports \code{data.frame}, \code{tdf_long}, and \code{tdf} formats via S3 dispatch.
+A unified generic entry point for computing derived time-series metrics such as
+growth rates, momentum, base effects, structural shares, growth contributions,
+seasonal measures, and deflator measures. Supports \code{data.frame},
+\code{tdf_long}, and \code{tdf} inputs through S3 dispatch.
 }
 \details{
-The calculation engine is driven by a declarative metric registry and a topological
-dependency graph. If you request a complex metric (e.g., \code{contribution_growth_rate}),
-the engine will automatically resolve and compute all prerequisites (e.g., \code{share_prev_year}
-and \code{growth_rate}) in the correct chronological order.
+The calculation engine is driven by a declarative metric registry and a
+dependency graph. When a metric has dependencies, the required prerequisite
+metrics are automatically resolved and computed in the correct order. For
+example, requesting \code{contribution_growth_rate} automatically computes
+its required \code{share_prev_year} and \code{growth_rate} metrics first.
 
-\strong{Important Limitations:}
+The public function signature explicitly exposes the available metric
+arguments to support IDE autocomplete. Computation is then dispatched to
+the appropriate S3 method according to the class of \code{dat}.
+
+\strong{Important limitations:}
 \itemize{
-\item \strong{Standard vs. Deflator:} Standard metrics and Deflator metrics cannot be computed
-in the same call. They must be executed separately.
-\item \strong{Wide \code{tdf} Objects:} When passing a \code{tdf} object (wide format), you may
-only compute \strong{one} metric per call. \code{.compute_all}, deflator calculations, and custom
-functions returning multiple metrics are restricted or not supported for wide \code{tdf} objects.
+\item \strong{Standard vs. deflator metrics:} Standard metrics and deflator
+metrics cannot be computed in the same call. They must be requested in
+separate calls.
+\item \strong{Wide \code{tdf} objects:} A maximum of one metric may be
+computed per call for a wide \code{tdf} object. The \code{.compute_all}
+option, deflator calculations, and custom functions returning multiple
+metrics are not supported for wide \code{tdf} objects.
 }
 }

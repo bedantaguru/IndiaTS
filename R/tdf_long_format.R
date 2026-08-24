@@ -129,11 +129,11 @@ tdf_long_check_structure  <- function(
   meta_cols <- colnames(dat)[colnames(dat) %>% str_detect("^meta\\.")]
 
   if(length(value_cols)==0){
-    stop("Input data.frame must have at least one column starting with 'value.'!!", call. = FALSE)
+    stop("Input data.frame must have at least one column starting with 'value.'!", call. = FALSE)
   }
 
   if(!"time" %in% colnames(dat)){
-    stop("Input data.frame must have a 'time' column!!", call. = FALSE)
+    stop("Input data.frame must have a 'time' column!", call. = FALSE)
   }
 
   other_cols <- colnames(dat)[!(colnames(dat) %>% str_detect("^value\\.") | colnames(dat) %>% str_detect("^meta\\.") | colnames(dat) %>% str_detect("^time$"))]

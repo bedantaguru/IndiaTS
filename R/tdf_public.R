@@ -337,7 +337,7 @@ as_tdf_for_ts_and_df <- function(df, allow_discontinuous = TRUE, fiscal_type = T
     df <- ts_to_tdf_part(df, fiscal_type = fiscal_type)
   } else {
     if(!is.data.frame(df)){
-      stop("Input must be a data.frame!!", call. = FALSE)
+      stop("Input must be a data.frame!", call. = FALSE)
     }
 
   }
