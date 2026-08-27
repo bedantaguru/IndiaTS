@@ -91,17 +91,41 @@
 #' @export
 hmap <- function(
     tdl,
-    weight = FALSE, retrieve_weight = FALSE, add_weight = NULL,
+    check_weight = FALSE,
+    weight = FALSE, retrieve_weight = FALSE, add_weight = NULL, normalise_weight = FALSE,
     get_stat = FALSE, detect_disaggregation_group = NULL,
     add = NULL, set = NULL, compact = FALSE,
     prune_data = FALSE, sync_data = FALSE, resync_data = FALSE,
+    set_settings = list(), get_settings = NULL, missing_summary = FALSE,
     ...){
 
   # Get Hmap
   hm <- attr(tdl, "hmap")
 
+  if(check_weight){
+    return(hmap_check_wtd(hm))
+  }
+
   if(weight){
-    return(attr(hm,"wtd"))
+
+    wtd <- attr(hm,"wtd")
+
+    if(NROW(wtd)==0){
+      message("No wait found!")
+    }
+
+    normalise <- isTRUE(attr(hm, "settings")$normalise_wtd)
+
+    if(normalise){
+      wtd <- wtd |>
+        dplyr::group_by(meta.disaggregation_group, meta.parent, meta.parent_disaggregation_group) |>
+        dplyr::mutate(wtd = wtd / sum(wtd)) |>
+        dplyr::ungroup()
+    }
+
+    wtd <- wtd |> dplyr::distinct()
+
+    return(wtd)
   }
 
   if(retrieve_weight){
@@ -110,7 +134,7 @@ hmap <- function(
 
   if(!is.null(add_weight) && is.data.frame(add_weight) && NROW(add_weight)>0){
     return(
-      hmap_add_weight(tdl, wtd = add_weight)
+      hmap_add_weight(tdl, wtd = add_weight, normalise = normalise_weight)
     )
   }
 
@@ -177,8 +201,78 @@ hmap <- function(
     return(hmap_resync_data(tdl))
   }
 
+  if(length(set_settings)>0 && is.list(set_settings)){
+    set_settings <- set_settings[!is.na(names(set_settings)) & nzchar(names(set_settings))]
+    if(length(set_settings)>0){
+
+      now_settings <- attr(hm, "settings")
+
+      if (is.null(now_settings)) {
+        now_settings <- list()
+      }
+
+      # Remove existing settings that are being replaced
+      now_settings <- now_settings[
+        !names(now_settings) %in% names(set_settings)
+      ]
+
+      # Append user-supplied settings
+      now_settings <- c(
+        now_settings,
+        set_settings
+      )
+
+      attr(hm, "settings") <- now_settings
+
+      attr(tdl, "hmap") <- hm
+
+      return(tdl)
+    }
+  }
+
+  if(length(get_settings)>0 && is.character(get_settings)){
+
+    all_settings <- attr(hm, "settings")
+    get_settings <- intersect(names(all_settings), get_settings)
+
+    if(length(get_settings)>1) get_settings <- get_settings[1]
+
+    if(length(get_settings)>0){
+      return(all_settings[[get_settings]])
+    }
+
+  }
+
+
+  if(missing_summary){
+    return(hmap_missing_summary(tdl))
+  }
+
 
   hm
+}
+
+hmap_check_wtd <- function(hm){
+  wtd <- attr(hm,"wtd")
+  if(is.data.frame(wtd)){
+    if(NROW(wtd)>0){
+      req_cols <- c("meta.name", "meta.disaggregation_group", "meta.parent", "meta.parent_disaggregation_group",
+                    "wtd")
+      if(length(setdiff(req_cols, colnames(wtd)))==0){
+
+        chkv <- c(
+          setdiff(c(wtd$meta.name, wtd$meta.parent), unname(unlist(hm))),
+          setdiff(c(wtd$meta.disaggregation_group, wtd$meta.parent_disaggregation_group), colnames(hm))
+        )
+
+        if(length(chkv) == 0){
+          return(TRUE)
+        }
+      }
+    }
+  }
+
+  return(FALSE)
 }
 
 # returns a list summary
@@ -356,7 +450,7 @@ hmap_add_on_tdf_long <- function(tdl,  new_hmap){
 }
 
 # Returns tdf_long
-hmap_add_weight <- function(tdl, wtd){
+hmap_add_weight <- function(tdl, wtd, normalise = FALSE){
   hm <- attr(tdl, "hmap")
 
   expected_cols <- c("meta.name", "meta.parent", "wtd", "meta.disaggregation_group",
@@ -371,12 +465,20 @@ hmap_add_weight <- function(tdl, wtd){
     dplyr::filter(meta.name %in% tdl$meta.name,
                   meta.disaggregation_group %in% tdl$meta.disaggregation_group) |>
     dplyr::filter(meta.parent %in% unlist(hm)) |>
-    dplyr::filter(meta.parent_disaggregation_group %in% colnames(hm))
+    dplyr::filter(meta.parent_disaggregation_group %in% colnames(hm)) |>
+    dplyr::group_by(meta.name, meta.disaggregation_group, meta.parent, meta.parent_disaggregation_group) |>
+    dplyr::summarise_all(mean) |>
+    dplyr::ungroup()
+
 
   if(NROW(wtd_cleaned)==0 && NROW(wtd)>0) warning("wtd may be malformed!", call. = FALSE)
 
   attr(hm, "wtd") <- wtd_cleaned
+  sn <- attr(hm, "settings")
+  sn$normalise_wtd <- normalise
+  attr(hm, "settings") <- sn
   attr(tdl, "hmap") <- hm
+
   tdl
 }
 
@@ -425,6 +527,7 @@ hmap_compact <- function(tdl, data_filter = TRUE){
   tdl
 
 }
+
 
 # Returns hmap
 hmap_retrieve_weight_for_index_type <- function(tdl, allow_discrepancy = FALSE, rescale= FALSE, force = TRUE){
@@ -809,4 +912,48 @@ hmap_resync_data <- function(tdl){
 }
 
 
+# Special functions
+hmap_missing_summary <- function(tdl){
+
+  hm <- attr(tdl, "hmap")
+
+  # Check data and see if all layers are proper in each time period
+
+  key_df <- tdl |>
+    dplyr::distinct(time, meta.release_tag, meta.price_basis)
+
+  # for a dg
+  for_a_dg <- function(dg){
+    # Extend key_df to have all possible combination
+    key_df_ext <- key_df |>
+      dplyr::cross_join(
+        dplyr::distinct(
+          dplyr::tibble(meta.name = hm[[dg]], meta.disaggregation_group = dg)))
+
+    k_chk <- tdl |>
+      dplyr::full_join(
+        key_df_ext,
+        by = c("time","meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group")
+      )
+
+    value_col <- if ("value.level" %in% names(k_chk)) {
+      "value.level"
+    } else {
+      grep("^value\\.", names(k_chk), value = TRUE)[1]
+    }
+
+    k_missed <- k_chk |>
+      dplyr::filter(is.na(.data[[value_col]]))
+
+    k_missed <- k_missed[c("time","meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group")] |> dplyr::distinct()
+
+    k_missed$meta.full_dg_missed <- length(setdiff(hm[[dg]],k_missed$meta.name))==0
+
+    k_missed
+  }
+
+  missing_hs <- colnames(hm) |> purrr::map(for_a_dg) |> dplyr::bind_rows()
+
+  missing_hs
+}
 

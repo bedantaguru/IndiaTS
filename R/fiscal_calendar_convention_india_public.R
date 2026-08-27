@@ -1165,8 +1165,8 @@ next_year <- function(x) {
 
 #' Check whether a period vector is continuous
 #'
-#' Determines whether a vector of calendar or fiscal periods forms a continuous
-#' sequence with no missing periods.
+#' Determines whether a vector of calendar periods, fiscal periods, or a
+#' time series data frame forms a continuous sequence with no missing periods.
 #'
 #' Continuity is assessed using the period's natural sequential ordering. The
 #' input does not need to be ordered, and duplicate periods are ignored.
@@ -1174,21 +1174,33 @@ next_year <- function(x) {
 #' Supported frequencies are month, quarter, half-year, and year. Mixed
 #' frequencies are treated as non-continuous.
 #'
-#' @param fp A vector inheriting from a recognized period class
-#'   (calendar or fiscal).
-#' @param return_missing Logical. If \code{FALSE} (default), returns a logical
-#'   scalar indicating whether the periods are continuous. If \code{TRUE},
+#' @param x An object to check for continuity. See the "Supported Methods"
+#'   section below for recognized classes.
+#' @param ... Additional arguments passed to specific methods (e.g., `return_missing`).
+#' @param return_missing Logical. If `FALSE` (default), returns a logical
+#'   scalar indicating whether the periods are continuous. If `TRUE`,
 #'   returns the missing periods. For a continuous sequence, an empty vector
-#'   of the same period type as \code{fp} is returned. For mixed frequencies,
-#'   the input \code{fp} is returned.
+#'   of the same period type as `x` is returned. For mixed frequencies,
+#'   the input `x` is returned.
 #'
-#' @return If \code{return_missing = FALSE}, a logical scalar:
-#'   \code{TRUE} if the periods form a continuous sequence and \code{FALSE}
-#'   otherwise. If \code{return_missing = TRUE}, returns the periods missing
+#' @return If `return_missing = FALSE`, a logical scalar:
+#'   `TRUE` if the periods form a continuous sequence and `FALSE`
+#'   otherwise. If `return_missing = TRUE`, returns the periods missing
 #'   from the sequence between the minimum and maximum periods.
 #'
+#' @section Supported Methods:
+#' \itemize{
+#'   \item \code{fiscal_period} / \code{calendar_period}: Assesses the continuity of
+#'     a raw period vector.
+#'   \item \code{tdf}: Extracts the \code{time} column from a standard time series
+#'     data frame and checks its continuity.
+#'   \item \code{tdf_long}: Groups the data frame by \code{meta.release_tag},
+#'     \code{meta.price_basis}, \code{meta.name}, and \code{meta.disaggregation_group},
+#'     checking continuity within each specific group. Returns \code{TRUE} only if all groups are continuous.
+#' }
+#'
 #' @details
-#' The function first verifies that \code{fp} is a recognized period type and
+#' The function first verifies that `x` is a recognized period type and
 #' determines its frequency. Mixed-frequency vectors cannot be assessed for
 #' continuity and are therefore treated as non-continuous.
 #'
@@ -1207,7 +1219,15 @@ next_year <- function(x) {
 #' is_continuous(x, return_missing = TRUE)
 #'
 #' @export
-is_continuous <- function(fp, return_missing = FALSE) {
+is_continuous <- function(x, ...) {
+  UseMethod("is_continuous")
+}
+
+#' @rdname is_continuous
+#' @export
+is_continuous.fiscal_period <- function(x, return_missing = FALSE) {
+
+  fp <- x
 
 
   if(!is_period_type(fp)){
@@ -1241,6 +1261,24 @@ is_continuous <- function(fp, return_missing = FALSE) {
 
 }
 
+#' @rdname is_continuous
+#' @export
+is_continuous.calendar_period <- is_continuous.fiscal_period
+
+#' @rdname is_continuous
+#' @export
+is_continuous.tdf_long <- function(x){
+
+  x |> dplyr::group_by(meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) |>
+    dplyr::summarise(cont = is_continuous(time), .groups = "drop") |>
+    dplyr::pull(cont) |> all()
+}
+
+#' @rdname is_continuous
+#' @export
+is_continuous.tdf <- function(x){
+  is_continuous(x$time)
+}
 
 
 

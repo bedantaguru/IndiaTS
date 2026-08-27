@@ -7,38 +7,60 @@
 splice_series(tdl, target_price_basis = NULL, ...)
 }
 \arguments{
-\item{tdl}{A \code{tdf_long} object containing the time-series data.
-The data must contain exactly two distinct values in the \code{meta.price_basis} column.}
+\item{tdl}{A time-series data object (e.g., \code{tdf_long} or \code{tdf_long_list}).}
 
 \item{target_price_basis}{A character string specifying which price basis
 should be retained as the benchmark (usually the newer base year). If left
 as \code{NULL}, the function automatically defaults to the price basis that
 contains the most recent time period.}
 
-\item{...}{Additional arguments passed to methods.}
+\item{...}{Additional arguments passed to specific methods.}
+
+\item{splice_method}{Character. The mathematical approach used to join the series.
+Either \code{"linking_factor"} (default) or \code{"growth_preserving"}.}
+
+\item{growth_anchor}{Character. Applicable only if \code{splice_method = "growth_preserving"}.
+Determines what metric is preserved from the old series: \code{"growth_rate"} (default)
+or \code{"momentum"}. Note that using \code{"momentum"} requires continuous periods.}
+
+\item{mean_type}{Character. Applicable only if \code{splice_method = "linking_factor"}.
+Determines how the average linking factor is calculated across the overlapping
+periods. Options are \code{"auto"} (default, switches based on data properties),
+\code{"GM"} (Geometric Mean), or \code{"AM"} (Arithmetic Mean).}
+
+\item{return_diagnostics}{Logical. If \code{TRUE} and using the \code{"linking_factor"}
+method, returns a list containing diagnostic dataframes (e.g., benchmark
+comparisons and linking factors) instead of the finalized spliced data.
+Defaults to \code{FALSE}.}
 }
 \value{
-A \code{tdf_long} object containing the spliced, continuous time series.
+A continuous time series object (of the same class as \code{tdl}).
 The original \code{meta.price_basis} dimension is collapsed to the target basis,
-and a new column \code{meta.is_spliced} is added to track which rows were mathematically converted.
+and a new column \code{meta.is_spliced} is added to track which rows were
+mathematically converted.
 }
 \description{
 Connects and aligns time series data that have undergone a base year revision
 (or change in price basis) to create a single, continuous historical series.
 }
 \details{
-This function takes a dataset containing exactly two distinct price bases
+This function takes a dataset containing two or more distinct price bases
 (e.g., an old base year and a new base year) and splices the historical series
-onto the target series.
+onto the target series. If more than two price bases are present, chain-linking
+is applied iteratively.
 
-The splicing operation calculates an \code{avg_linking_factor} based on the
-overlapping periods between the two series. If the data is sub-annual and
-contains full seasonal cycles in the overlap, it computes season-specific
-linking factors (e.g., separate factors for Q1, Q2, Q3, and Q4). Otherwise,
-it computes a single, flat linking factor.
+Two primary splicing methods are supported:
+\itemize{
+\item \strong{\code{linking_factor} (Default):} Calculates an average linking factor based on
+the overlapping periods between the two series. The historical series is
+multiplied by this linking factor. If the overlapping series are non-stationary
+(e.g., non-I(0)), a warning may be issued.
+\item \strong{\code{growth_preserving}:} Converts the historical series into growth rates
+(or momentum) and applies those rates sequentially backwards from the
+earliest available point in the target series.
+}
 
-The historical series is multiplied by this linking factor, and the newly
-extended historical periods are appended to the target series. A new boolean
-column, \code{meta.is_spliced}, is added to the output to flag the back-casted
-(converted) observations.
+The newly extended historical periods are appended to the target series, and a
+new boolean column, \code{meta.is_spliced}, is added to the output to flag the
+back-casted (converted) observations.
 }

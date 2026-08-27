@@ -8,13 +8,37 @@ aggregate_component <- function(tdl, n_iter = Inf, silent = FALSE){
   i <- 1
 
   repeat{
+
+    st_before <- list(
+      ndgs =  unique(tdl_now$data$meta.disaggregation_group) |> length(),
+      ndgs2 = tdl_now$data |> dplyr::distinct(meta.name, meta.disaggregation_group) |> NROW(),
+      nr = NROW(tdl_now$data)
+    )
+
     agg_part <- aggregate_component_part(tdl_now)
 
     tdl_now <- agg_part$main_agg
 
+    st_after <- list(
+      ndgs =  unique(tdl_now$data$meta.disaggregation_group) |> length(),
+      ndgs2 = tdl_now$data |> dplyr::distinct(meta.name, meta.disaggregation_group) |> NROW(),
+      nr = NROW(tdl_now$data)
+    )
+
+
     chk <- check_component_disaggregation_layer_completeness(tdl_now)
 
     if(!chk$any_missed) break()
+
+    if(identical(st_before, st_after)) {
+      if(chk$any_missed){
+        message(
+          "No further progress was made. Exiting the loop. ",
+          "There may be incomplete or unresolved layers; please check the hierarchy carefully."
+        )
+      }
+      break()
+    }
 
     i <- i+1
 
@@ -335,11 +359,13 @@ tdf_long_op_for_fixed_dg <- function(nd, hmap, hmap_info){
   final_variant[intersect(nd_orig_cols, colnames(final_variant))]
 }
 
-
+# Here dg is target dg
 tdf_long_op_for_taget_dg <- function(dg, nd, hmap, hthis, all_4_pks, agg_fn, nd_orig_cols){
   this_map <- hmap[c(hthis,dg)]
   colnames(this_map) <- c("meta.name", "meta.parent")
   this_map <- distinct(this_map)
+  # This is for future compatibility
+  this_map$meta.parent_disaggregation_group <- dg
 
   this_map_ext <- this_map %>% dplyr::cross_join(all_4_pks)
 
@@ -397,13 +423,44 @@ tdf_long_op_for_a_parent_in_fixed_dg <- function(nd_v, hmap, nd_orig_cols, agg_f
              paste0(extra_cats, collapse = ", ")), call. = FALSE)
   }
 
+  # Weight infusion
+  is_wtd <- hmap_check_wtd(hmap)
 
-  nd_ag <- nd_v %>%
+  if(is_wtd){
+    # Wtd situation
+    wtd <- attr(hmap, "wtd")
+    normalise <- isTRUE(attr(hmap, "settings")$normalise_wtd)
+
+    nd_v2 <- nd_v |>
+      dplyr::left_join(
+        wtd, by = c("meta.name", "meta.disaggregation_group", "meta.parent", "meta.parent_disaggregation_group"))
+
+    nd_v2$wtd <- dplyr::if_else(is.na(nd_v2$wtd), 1L, nd_v2$wtd)
+
+    if(normalise){
+      nd_v2 <- nd_v2 |>
+        dplyr::group_by(
+          time, meta.release_tag, meta.price_basis,
+          meta.disaggregation_group, meta.parent, meta.parent_disaggregation_group) |>
+        dplyr::mutate(wtd = wtd / sum(wtd)) |>
+        dplyr::ungroup()
+    }
+
+  } else {
+
+    # No wtd situation
+    nd_v2 <- nd_v
+
+    nd_v2$wtd  <- 1L
+
+  }
+
+  nd_ag <- nd_v2 %>%
     rename(src = meta.name) %>%
     rename(meta.name = meta.parent) %>%
     group_by(time, meta.name, meta.disaggregation_group, meta.price_basis, meta.release_tag) %>%
     summarise(
-      value.level = agg_fn(value.level),
+      value.level = agg_fn(value.level*wtd),
       meta.unit = meta.unit[1],
       meta.release_date = max(meta.release_date),
       meta.release_order = max(meta.release_order),
@@ -416,6 +473,7 @@ tdf_long_op_for_a_parent_in_fixed_dg <- function(nd_v, hmap, nd_orig_cols, agg_f
       # no further aggregation possible or not defined.
       meta.parent = "#root"
     )
+
 
   hthis <- hmap_which_disaggregation_group(nd_ag$meta.name, hmap = hmap)[1]
   nd_ag <- nd_ag %>%

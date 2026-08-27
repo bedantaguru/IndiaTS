@@ -4,7 +4,7 @@
 \alias{ex_tdf_input_normalization}
 \title{Normalize Flexible Input Data to tdf_long Format}
 \usage{
-ex_tdf_input_normalization(x, y, value_def)
+ex_tdf_input_normalization(x, y, value_def, var_def = NULL)
 }
 \arguments{
 \item{x}{The reference \code{tdf_long} object to draw metadata and hierarchy rules from.}
@@ -13,6 +13,9 @@ ex_tdf_input_normalization(x, y, value_def)
 
 \item{value_def}{Character string denoting the metric (e.g., "value.level").
 Strictly required when \code{y} is an atomic vector or a wide data frame.}
+
+\item{var_def}{Character string denoting the series name (\code{meta.name}).
+Required when \code{y} is an atomic vector and \code{x} contains multiple series.}
 }
 \value{
 A strictly formatted \code{tdf_long} object ready for row-binding.

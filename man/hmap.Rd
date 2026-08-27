@@ -6,9 +6,11 @@
 \usage{
 hmap(
   tdl,
+  check_weight = FALSE,
   weight = FALSE,
   retrieve_weight = FALSE,
   add_weight = NULL,
+  normalise_weight = FALSE,
   get_stat = FALSE,
   detect_disaggregation_group = NULL,
   add = NULL,
@@ -17,6 +19,9 @@ hmap(
   prune_data = FALSE,
   sync_data = FALSE,
   resync_data = FALSE,
+  set_settings = list(),
+  get_settings = NULL,
+  missing_summary = FALSE,
   ...
 )
 }

@@ -8,11 +8,11 @@
 \alias{extend.tdf_long}
 \title{Extend a Dataset with New Incremental Data}
 \usage{
-extend(x, y, primary_key, type = c("left", "right"), ...)
+extend(x, y, ...)
 
 \method{extend}{tibble}(x, y, primary_key, type = c("left", "right"), ...)
 
-\method{extend}{list}(x, primary_key, type = c("left", "right"), ...)
+\method{extend}{list}(x, y = NULL, primary_key, type = c("left", "right"), ...)
 
 \method{extend}{data.frame}(x, y, primary_key, type = c("left", "right"), ...)
 
@@ -20,8 +20,9 @@ extend(x, y, primary_key, type = c("left", "right"), ...)
   x,
   y,
   value_def,
-  type = c("left", "right"),
+  var_def = NULL,
   auto_level_reversal = TRUE,
+  type = c("left", "right"),
   ...
 )
 }
@@ -32,28 +33,34 @@ extend(x, y, primary_key, type = c("left", "right"), ...)
 \code{y} is highly flexible and will be automatically normalized. It can be an atomic
 vector, a wide data frame with a \code{seq} column, a wide \code{tdf}, or another \code{tdf_long}.}
 
-\item{primary_key}{A character vector of column names that uniquely identify a row.
-\strong{Note:} This is \emph{not required} for \code{tdf_long} objects, as they inherently
-derive their primary keys from standard schema columns.}
+\item{...}{Additional arguments passed to specific methods.}
+
+\item{primary_key}{\emph{(For \code{tibble}/\code{data.frame}/\code{list})} A character vector of column
+names that uniquely identify a row. Not used for \code{tdf_long}, which inherently
+derives its primary keys from the standard schema.}
 
 \item{type}{Character string indicating duplicate resolution direction.
 \code{"left"} keeps the original row in \code{x}; \code{"right"} overwrites it with the new row from \code{y}.}
 
-\item{...}{Additional arguments passed to methods. For \code{extend.tdf_long},
-you must provide \code{value_def} (character) if \code{y} is a vector or wide data frame.}
+\item{value_def}{\emph{(For \code{tdf_long})} Character string denoting the metric (e.g., "value.level").
+Strictly required when \code{y} is an atomic vector or a wide data frame.}
 
-\item{auto_level_reversal}{Logical. If \code{TRUE} (default), the function automatically
-attempts to reconstruct missing \code{value.level} observations using the newly appended
-derived metrics (e.g., growth rates or momentum).}
+\item{var_def}{\emph{(For \code{tdf_long})} Character string denoting the series name (\code{meta.name}).
+Required when \code{y} is an atomic vector and \code{x} contains multiple series, to explicitly
+specify which series \code{y} belongs to.}
+
+\item{auto_level_reversal}{\emph{(For \code{tdf_long})} Logical. If \code{TRUE} (default), the function
+automatically attempts to reconstruct missing \code{value.level} observations using the
+newly appended derived metrics (e.g., growth rates or momentum).}
 }
 \value{
 An object of the same class as \code{x}, extended with the data from \code{y}.
 }
 \description{
 \code{extend()} is an S3 generic function used to merge or append new incremental
-data (\code{y}) into a primary dataset (\code{x}). It ensures that rows remain distinct
-based on a specified \code{primary_key}, resolving duplicates by prioritizing
-either the old data ("left") or the new data ("right").
+data (\code{y}) into a primary dataset (\code{x}). It ensures that rows remain distinct,
+resolving duplicates by prioritizing either the old data ("left") or the new
+data ("right").
 
 While \code{extend()} works with standard data frames and lists, its primary
 intent is to seamlessly update long-format time-series (\code{tdf_long}) objects

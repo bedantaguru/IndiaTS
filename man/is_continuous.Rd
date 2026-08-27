@@ -2,19 +2,33 @@
 % Please edit documentation in R/fiscal_calendar_convention_india_public.R
 \name{is_continuous}
 \alias{is_continuous}
+\alias{is_continuous.fiscal_period}
+\alias{is_continuous.calendar_period}
+\alias{is_continuous.tdf_long}
+\alias{is_continuous.tdf}
 \title{Check whether a period vector is continuous}
 \usage{
-is_continuous(fp, return_missing = FALSE)
+is_continuous(x, ...)
+
+\method{is_continuous}{fiscal_period}(x, return_missing = FALSE)
+
+\method{is_continuous}{calendar_period}(x, return_missing = FALSE)
+
+\method{is_continuous}{tdf_long}(x)
+
+\method{is_continuous}{tdf}(x)
 }
 \arguments{
-\item{fp}{A vector inheriting from a recognized period class
-(calendar or fiscal).}
+\item{x}{An object to check for continuity. See the "Supported Methods"
+section below for recognized classes.}
+
+\item{...}{Additional arguments passed to specific methods (e.g., \code{return_missing}).}
 
 \item{return_missing}{Logical. If \code{FALSE} (default), returns a logical
 scalar indicating whether the periods are continuous. If \code{TRUE},
 returns the missing periods. For a continuous sequence, an empty vector
-of the same period type as \code{fp} is returned. For mixed frequencies,
-the input \code{fp} is returned.}
+of the same period type as \code{x} is returned. For mixed frequencies,
+the input \code{x} is returned.}
 }
 \value{
 If \code{return_missing = FALSE}, a logical scalar:
@@ -23,8 +37,8 @@ otherwise. If \code{return_missing = TRUE}, returns the periods missing
 from the sequence between the minimum and maximum periods.
 }
 \description{
-Determines whether a vector of calendar or fiscal periods forms a continuous
-sequence with no missing periods.
+Determines whether a vector of calendar periods, fiscal periods, or a
+time series data frame forms a continuous sequence with no missing periods.
 }
 \details{
 Continuity is assessed using the period's natural sequential ordering. The
@@ -33,7 +47,7 @@ input does not need to be ordered, and duplicate periods are ignored.
 Supported frequencies are month, quarter, half-year, and year. Mixed
 frequencies are treated as non-continuous.
 
-The function first verifies that \code{fp} is a recognized period type and
+The function first verifies that \code{x} is a recognized period type and
 determines its frequency. Mixed-frequency vectors cannot be assessed for
 continuity and are therefore treated as non-continuous.
 
@@ -42,6 +56,19 @@ continuity is assessed. The complete sequence from the minimum to the
 maximum period is then generated using the period's natural increment, and
 the observed periods are compared with this sequence.
 }
+\section{Supported Methods}{
+
+\itemize{
+\item \code{fiscal_period} / \code{calendar_period}: Assesses the continuity of
+a raw period vector.
+\item \code{tdf}: Extracts the \code{time} column from a standard time series
+data frame and checks its continuity.
+\item \code{tdf_long}: Groups the data frame by \code{meta.release_tag},
+\code{meta.price_basis}, \code{meta.name}, and \code{meta.disaggregation_group},
+checking continuity within each specific group. Returns \code{TRUE} only if all groups are continuous.
+}
+}
+
 \examples{
 x <- as_calendar_period(c("Jan 2020", "Feb 2020", "Mar 2020"))
 is_continuous(x)

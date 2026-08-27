@@ -97,8 +97,6 @@ test_that("fiscal_quarter infers FY and quarter from lowercase short text", {
 
 
 
-library(testthat)
-
 # ============================================================================
 # Test 1: MONTHLY frequency
 # ============================================================================

@@ -1,15 +1,23 @@
 
 
 # Internal Engine for Reconstructing Levels from Rates or Shares
-convert_to_level_core <- function(tdl, present_metric_col, req_metric_flag, recreate_fn) {
+convert_to_level_core <- function(
+    tdl, present_metric_col, req_metric_flag = NULL, recreate_fn = NULL,
+    direct_recreate_fn = NULL, backward_mode = FALSE, backward_time_check_fn = identity) {
 
-  req_col <- paste0("value.", req_metric_flag)
+  # Required to restore later.
+  original_cols <- colnames(tdl)
 
   # ---------------------------------------------------------------------------
   # 1. Basic Validation Checks
   # ---------------------------------------------------------------------------
   if (!inherits(tdl, "tdf_long")) {
-    stop("`tdl` must inherit from the `tdf_long` class.", call. = FALSE)
+    str_chk <- tryCatch(tdf_long_check_structure(tdl, hmap = data.frame()), error = function(e) NULL)
+    if(is.null(str_chk)){
+      stop("`tdl` must inherit from the `tdf_long` class. (or having the structure)", call. = FALSE)
+    } else {
+      tdl <- str_chk
+    }
   }
 
   if (!all(c("value.level", present_metric_col) %in% colnames(tdl))) {
@@ -21,18 +29,30 @@ convert_to_level_core <- function(tdl, present_metric_col, req_metric_flag, recr
     return(tdl)
   }
 
-  if (!all(!is.na(tdl$value.level) | !is.na(tdl[[present_metric_col]]))) {
-    stop(
-      sprintf("Missing data conflict: There are rows where both `value.level` and `%s` are NA. ", present_metric_col),
-      "At least one must be present in every row to reconstruct the series.",
-      call. = FALSE
-    )
+  if(backward_mode){
+
+    tf0 <- min(tdl$time[is.na(tdl$value.level)])
+    tf1 <- min(tdl$time[!is.na(tdl[[present_metric_col]])])
+
+    if(tf0 < backward_time_check_fn(tf1)) {
+      stop("Missing data conflict: Missing level is beyond conversion range.", call. = FALSE)
+    }
+
+  } else {
+    if (!all(!is.na(tdl$value.level) | !is.na(tdl[[present_metric_col]]))) {
+      stop(
+        sprintf("Missing data conflict: There are rows where both `value.level` and `%s` are NA. ", present_metric_col),
+        "At least one must be present in every row to reconstruct the series.",
+        call. = FALSE
+      )
+    }
   }
+
 
   # ---------------------------------------------------------------------------
   # 2. Categorize and Stash Columns
   # ---------------------------------------------------------------------------
-  original_cols <- colnames(tdl)
+  # Defined earlier original_cols
   value_cols <- stringr::str_subset(original_cols, "^value\\.")
 
   registry_cols     <- paste0("value.", names(metric_registry))
@@ -61,16 +81,23 @@ convert_to_level_core <- function(tdl, present_metric_col, req_metric_flag, recr
     n_missing_before <- sum(is.na(step1$value.level))
 
     # 3a: Dynamically trigger the required prerequisite metric
-    metric_args <- stats::setNames(list(TRUE), req_metric_flag)
-    step1 <- do.call(compute_metric, c(list(dat = step1), metric_args))
+    if(length(req_metric_flag)>0){
+      metric_args <- stats::setNames(list(TRUE), req_metric_flag)
+      step1 <- do.call(compute_metric, c(list(dat = step1), metric_args))
+    }
 
     # 3b: Reconstruct the level using the injected math function
-    step2 <- step1 |> compute_metric(
-      .custom_function = list(
-        level_recreate = recreate_fn
-      ),
-      .options = list(.custom_function = "data")
-    )
+    if(is.function(recreate_fn)){
+      step2 <- step1 |> compute_metric(
+        .custom_function = list(
+          level_recreate = recreate_fn
+        ),
+        .options = list(.custom_function = "data")
+      )
+    } else if(is.function(direct_recreate_fn)) {
+      step2 <- direct_recreate_fn(step1)
+    }
+
 
     # 3c: Fill NAs and dynamically drop intermediate scratch columns
     step3 <- step2 |> compute_metric(
@@ -79,20 +106,18 @@ convert_to_level_core <- function(tdl, present_metric_col, req_metric_flag, recr
       ),
       .options = list(.custom_function = "data")
     ) |>
-      dplyr::select(-value.level, -dplyr::all_of(req_col), -value.level_recreate) |>
+      dplyr::select(-value.level, -value.level_recreate) |>
       dplyr::rename(value.level = value.level_fix)
 
-    step1 <- step3
+    step1 <- step3[colnames(tdl)]
     n_missing_after <- sum(is.na(step1$value.level))
 
     if (n_missing_after == 0L) break
 
     if (n_missing_after >= n_missing_before || n_iter > max_iter) {
-      stop(
-        sprintf("Unable to reconstruct all missing values of `value.level`. "),
-        sprintf("Some observations lack a valid base metric (`%s`) to project from.", req_col),
-        call. = FALSE
-      )
+      # No progress also breaks with message
+      message("Unable to reconstruct all missing values of `value.level`. ")
+      break()
     }
   }
 
@@ -124,7 +149,7 @@ convert_to_level_core <- function(tdl, present_metric_col, req_metric_flag, recr
 # A list containing all available functions for reconstructing `value.level`
 # from derived metrics.
 
-metric_reversal_registry <- list(
+metric_reversal_registry_forward <- list(
 
   # Reverse YoY Growth Rate to Level
   value.growth_rate = function(tdl) {
@@ -187,6 +212,52 @@ metric_reversal_registry <- list(
 )
 
 
+
+metric_reversal_registry_backward <- list(
+
+  # Reverse YoY Growth Rate to Level
+  value.growth_rate = function(tdl) {
+    convert_to_level_core(
+      tdl = tdl,
+      present_metric_col = "value.growth_rate",
+      direct_recreate_fn = function(x){
+        x$lvl_shift <- x$value.level / (1 + x$value.growth_rate / 100)
+        x$time_shift <- previous_year(x$time)
+        x2 <- x |> dplyr::select(
+          time = time_shift,
+          meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group,
+          value.level_recreate = lvl_shift) |>
+          stats::na.omit()
+        x3 <- x |>
+          left_join(x2, by = c("time", "meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group"))
+        x3
+      },
+      backward_time_check_fn = previous_year,
+      backward_mode = TRUE
+    )
+  },
+
+  # Reverse PoP Momentum to Level
+  value.momentum = function(tdl) {
+    convert_to_level_core(
+      tdl = tdl,
+      present_metric_col = "value.momentum",
+      direct_recreate_fn = function(x){
+        x <- x |> dplyr::arrange(dplyr::desc(as.Date(time)))
+        x$ratio <- x$value.momentum/100+1
+        x |> dplyr::group_by(meta.release_tag, meta.price_basis, meta.name, meta.disaggregation_group) |>
+          dplyr::mutate(cpr =  cumprod(ratio)) |>
+          dplyr::mutate(value.level_recreate = dplyr::lag(value.level[1]/cpr)) |>
+          dplyr::ungroup()
+      },
+      backward_time_check_fn = previous_period,
+      backward_mode = TRUE
+    )
+  }
+
+)
+
+
 detect_metric_to_reverse_from <- function(tdl){
   tdl |>
     # 1. Isolate rows where level is missing
@@ -199,7 +270,28 @@ detect_metric_to_reverse_from <- function(tdl){
     names()
 }
 
+forward_backward_detection <- function(tdl){
+  f_chk <- anyNA(tdl$value.level[tdl$time==max(tdl$time)])
+  b_chk <- anyNA(tdl$value.level[tdl$time==min(tdl$time)])
 
+  if(f_chk && !b_chk) return("forward")
+  if(!f_chk && b_chk) return("backward")
+
+  if(!f_chk && !b_chk) {
+    if(!anyNA(tdl$value.level)) return("no_action")
+  }
+
+  stop(
+    paste0(
+      "Unable to determine the filling direction for `value.level`. ",
+      "The missing values must occur either at the beginning (backward fill) ",
+      "or at the end (forward fill) of the series, but the current data ",
+      "do not satisfy either condition."
+    ),
+    call. = FALSE
+  )
+
+}
 
 #' Reverse Derived Metrics to Base Level
 #'
@@ -222,6 +314,21 @@ convert_to_level <- function(tdl, verbose = TRUE) {
       message("No missing levels to reconstruct, or no valid metrics found to project from. Returning original data.")
     }
     return(tdl)
+  }
+
+  fb <- forward_backward_detection(tdl)
+
+  if(fb == "no_action") {
+    if (isTRUE(verbose)) {
+      message("No missing levels to reconstruct. Returning original data.")
+    }
+    return(tdl)
+  }
+
+  if(fb == "forward") {
+    metric_reversal_registry <- metric_reversal_registry_forward
+  } else if(fb == "backward") {
+    metric_reversal_registry <- metric_reversal_registry_backward
   }
 
   # Scenario 2: Ambiguity (Too many target metrics)

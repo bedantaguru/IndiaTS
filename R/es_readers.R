@@ -604,6 +604,20 @@ es_convert_gdp <- function(dat, hmap = NULL, freq,
     }
   }
 
+  wtd <- tibble::tribble(
+    ~meta.name,                     ~meta.disaggregation_group,      ~meta.parent,             ~meta.parent_disaggregation_group, ~wtd,
+    "Export of Goods and Services", "demand_side_components",        "Net Export",             "demand_side_components_dense",      1L,
+    "Import of Goods and Services", "demand_side_components",        "Net Export",             "demand_side_components_dense",     -1L,
+    "Export of Goods and Services", "demand_side_components_legacy", "Net Export",             "demand_side_components_dense",      1L,
+    "Import of Goods and Services", "demand_side_components_legacy", "Net Export",             "demand_side_components_dense",     -1L,
+    "Export of Goods and Services", "demand_side_components",        "Gross Domestic Product", "indicator",                         1L,
+    "Import of Goods and Services", "demand_side_components",        "Gross Domestic Product", "indicator",                        -1L,
+    "Export of Goods and Services", "demand_side_components_legacy", "Gross Domestic Product", "indicator",                         1L,
+    "Import of Goods and Services", "demand_side_components_legacy", "Gross Domestic Product", "indicator",                        -1L
+  )
+
+  attr(hmap,"wtd") <- wtd
+
   if (missing(freq)) {
     if (!"frequency" %in% colnames(dat)) {
       stop(
@@ -692,6 +706,7 @@ es_prepare_gdp_data <- function(dat, hmap, freq = c("quarterly", "annual")) {
 es_convert_composite <- function(dat){
   hmgva <- es_load_predefined_data("hmap_gva")
   hmgdp <- es_load_predefined_data("hmap_gdp")
+
 
   is_gva <- FALSE
   is_gdp <- FALSE
