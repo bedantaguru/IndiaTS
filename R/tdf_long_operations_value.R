@@ -229,7 +229,7 @@ metric_registry <- list(
   share_pct = new_metric(
     label = "Share (%)", category = "Structure", output = ".value.share_pct", depends = "level_parent", requires = "parent",
     compute_fn = function(dat, ctx) {
-      dat$.value.share_pct <- safe_divide(dat$value.level, dat$.value.level_parent) * 100
+      dat$.value.share_pct <- safe_divide(dat$.tmp_wtd * dat$value.level, dat$.value.level_parent) * 100
       dat
     }
   ),
@@ -417,9 +417,48 @@ compute_metrics_engine <- function(dat, requested, registry) {
 
   dat <- dat %>% dplyr::select(
     -dplyr::any_of(requested_cols),
+    -dplyr::starts_with(".tmp_"),
     -dplyr::starts_with(".time_"),
     -dplyr::starts_with(".value.")
   )
+
+  # Check for wtd is exists
+  wchk <- hmap(dat, check_weight = TRUE)
+  if(isTRUE(wchk)){
+
+    wtd <- hmap(dat, weight = TRUE)
+
+    idx_type_check <- wtd |>
+      dplyr::group_by(meta.parent, meta.parent_disaggregation_group) |>
+      dplyr::summarise(sw = sum(wtd), .groups = "drop") |>
+      dplyr::pull(sw)
+
+    # This will be 0 for index types (where wtd sums close to 1)
+    idx_type_check <- max(abs(round(idx_type_check - 1,1)))
+
+    dat <- dat |>
+      left_join(
+        # get wtd
+        wtd,
+        by = c("meta.name", "meta.disaggregation_group","meta.parent", "meta.parent_disaggregation_group")
+      )
+    colnames(dat)[colnames(dat)=="wtd"] <- ".tmp_wtd"
+
+    if(anyNA(dat[[".tmp_wtd"]])){
+      if(idx_type_check){
+        message(
+          "Some weights are unavailable for certain meta.name–parent combinations ",
+          "and have been set to 1. This may not be appropriate for index-type data. ",
+          "Please check the results carefully."
+        )
+      }
+      dat[[".tmp_wtd"]][is.na(dat[[".tmp_wtd"]])] <- 1
+    }
+
+  } else {
+    # Set wtd to 1 for calculation symmetry
+    dat[[".tmp_wtd"]] <- 1
+  }
 
   id_cols <- c("meta.release_tag", "meta.price_basis", "meta.name", "meta.disaggregation_group")
   missing_id_cols <- setdiff(id_cols, colnames(dat))
@@ -480,6 +519,7 @@ compute_metrics_engine <- function(dat, requested, registry) {
   dat <- dat %>% dplyr::rename(dplyr::all_of(rename_map))
 
   dat %>% dplyr::select(
+    -dplyr::starts_with(".tmp_"),
     -dplyr::starts_with(".time_"),
     -dplyr::starts_with(".value."),
     -dplyr::any_of(ctx$missing_id_cols)

@@ -1477,10 +1477,25 @@ Ops.fiscal_period <- function(e1, e2) {
   op <- .Generic
 
   # Normally rest of the function assumes e1 is period_type But in case user gives other-side then swap them
-  if(is_period_type(e2) & !is_period_type(e1)){
-    swp <- e2
-    e2 <- e1
-    e1 <- swp
+  # If e2 is the period and e1 is not, swap them so downstream code only has to handle one orientation
+  if (is_period_type(e2) && !is_period_type(e1)) {
+    supported_swappable_op <- c("==", "!=", "<", "<=", ">", ">=", "+")
+
+    if (op %in% supported_swappable_op) {
+      # 1. Swap the operands (requires curly braces!)
+      swp <- e2
+      e2 <- e1
+      e1 <- swp
+
+      # 2. Reverse the relational operators to maintain mathematical truth
+      op <- switch(op,
+                   "<"  = ">",
+                   "<=" = ">=",
+                   ">"  = "<",
+                   ">=" = "<=",
+                   op # Keep "==", "!=", and "+" exactly as they are
+      )
+    }
   }
 
   # 1. Handle Relational (Comparison) Operators using as.Date

@@ -265,3 +265,23 @@ drop_constant_cols <- function(data, na = FALSE) {
     )
 }
 
+
+col_extend_from_ref <- function(d, dref, keys){
+  cdif <- colnames(dref) |> setdiff(colnames(d))
+  for_each_col <- function(cn){
+    lchk <- dref[[cn]] |> unique() |> length()
+    if(lchk == 1){
+      d[[cn]] <- dref[[cn]][1]
+    } else {
+      dd <- dref[c(keys, cn)] |> dplyr::distinct()
+      d <- d |> dplyr::left_join(dd, by = keys)
+    }
+    d[cn]
+  }
+
+  for_all <- cdif |> purrr::map(for_each_col) |> dplyr::bind_cols()
+  do <- dplyr::bind_cols(d, for_all)
+  do[colnames(dref)]
+}
+
+

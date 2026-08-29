@@ -659,7 +659,9 @@ splice_series_for_multi_pbase_part <- function(
 
     # Check identical(unique(tdld_this_spl$data$time) |> sort(), unique(tdld_this$time) |> sort())
 
-    tdld_now <- tdld_this_spl$data[colnames(tdld_now)]
+    tdld_now <- col_extend_from_ref(
+      tdld_this_spl$data, tdl$data,
+      keys = c("meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group"))
   }
 
   tdl_out <- tdl
