@@ -109,6 +109,7 @@ as_tdf.tdf_long <- function(
     df,
     value_name = NULL, names = NULL, disaggregation_group = NULL,
     divergence_tol_pct = 5,
+    headline_splits = FALSE,
     add_price_basis_as_tag, use_short_names = FALSE, ...){
 
   colnames(df) <- tolower(colnames(df))
@@ -155,6 +156,31 @@ as_tdf.tdf_long <- function(
   if(add_price_basis_as_tag){
     df$meta.name <- df$meta.name |> paste0("_",df$meta.price_basis)
     df$meta.price_basis <-"unified"
+  }
+
+  if(headline_splits) {
+    if(!is.null(disaggregation_group)){
+      # include indicator too
+      disaggregation_group <- c(disaggregation_group, "indicator")
+    } else {
+      if(is.null(hmap(df))){
+        disaggregation_group <- "indicator"
+      } else {
+        # In this case it will try to provide a most granular highest data point disaggregation_group and indicator
+        hs <- hmap(df, missing_summary = TRUE)
+        hs2 <- hs |>
+          dplyr::group_by(time,meta.release_tag, meta.price_basis, meta.disaggregation_group) |>
+          dplyr::summarise(nmax = meta.n_names_in_dg[1], nthis = dplyr::n_distinct(meta.name), .groups = "drop") |>
+          dplyr::mutate(missing_frac = nthis/nmax) |>
+          dplyr::group_by(meta.disaggregation_group) |>
+          dplyr::summarise(avg_m_frac = mean(missing_frac), dg_size = nmax[1], .groups = "drop")
+
+        hs2 <- hs2 |> dplyr::arrange(avg_m_frac, -dg_size) |> dplyr::slice_head(n = 1)
+
+        disaggregation_group <- c(hs2$meta.disaggregation_group[1], "indicator")
+
+      }
+    }
   }
 
   df <- df |>
@@ -316,7 +342,18 @@ as_tdf.tdf_long <- function(
 
   df_wide <- df |> tidyr::pivot_wider(id_cols = time, names_from = meta.name, values_from = val_col)
 
-  as_tdf_for_ts_and_df(df_wide)
+  tdo <- as_tdf_for_ts_and_df(df_wide)
+  # Add hmap if not empty
+  hm_now <- hmap(df)
+
+  if(NROW(hm_now) == 0) hm_now <- NULL
+
+  if(!is.null(hm_now)){
+    attr(tdo, "hmap") <- hm_now
+  }
+
+  # Sort it for better representation
+  tdo |> sort()
 
 }
 

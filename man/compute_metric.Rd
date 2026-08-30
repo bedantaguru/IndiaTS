@@ -111,8 +111,8 @@ compute_metric(
   SAAR = FALSE,
   .custom_function = NULL,
   .options = list(level_lag_n = 1, level_lead_n = 1, .custom_function = c("on_level",
-    "data")),
-  .omit_na = NULL
+    "data"), .recompute_hmap = FALSE),
+  .omit_na = FALSE
 )
 }
 \arguments{

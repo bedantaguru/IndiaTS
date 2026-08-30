@@ -13,12 +13,14 @@
 #' disaggregation groups, or modify/compact the hierarchy.
 #'
 #' @param tdl A long-format time-series data frame containing an `hmap` attribute.
+#' @param check_weight Logical. Validates if the currently attached weights are structurally correct.
 #' @param weight Logical. Return the currently attached aggregation weights (`wtd`).
 #' @param retrieve_weight Logical. Estimate aggregation weights using OLS
 #'   regressions between parent and child series.
 #' @param add_weight A data frame of custom weights to attach. Required columns:
 #'   `meta.name`, `meta.parent`, `wtd`, `meta.disaggregation_group`, and
 #'   `meta.parent_disaggregation_group`.
+#' @param normalise_weight Logical. If `TRUE`, normalizes weights (so they sum to 1) when applying via `add_weight`.
 #' @param get_stat Logical. Return hierarchy statistics, including parent-child
 #'   mappings and waterfalls.
 #' @param detect_disaggregation_group Character vector of series names. Returns
@@ -27,12 +29,18 @@
 #'   or a named list of formulas to merge into `hmap`.
 #' @param set A data frame that completely replaces the existing `hmap`.
 #' @param compact Logical. Compact `tdl` and `hmap` by removing unmapped data.
+#' @param delete Logical. If `TRUE`, removes the `hmap` attribute entirely from `tdl`.
 #' @param prune_data Logical. Reduce the `tdl` data frame to the bare minimum observations
 #'   (lowest waterfall rank) required to aggregate up to main figures without redundancy.
 #' @param sync_data Logical. Aggregate and populate all disaggregation layers across
 #'   the hierarchy using existing base components.
 #' @param resync_data Logical. Perform a complete data reset by first pruning
 #'   (`prune_data = TRUE`) and then recalculating all layers (`sync_data = TRUE`).
+#' @param set_settings A named list of settings to append or update in the `hmap` attributes.
+#' @param get_settings Character string specifying the setting name to retrieve.
+#' @param missing_summary Logical. If `TRUE`, returns a data frame summarizing missing values across disaggregation layers and time periods.
+#' @param extract_from_tdf Logical. If `TRUE` and `tdl` is actually a wide-format `tdf`, attempts to auto-discover the parent-child hierarchy map and weights (headline vs. splits).
+#' @param extract_from_tdf_and_convert_to_long Logical. If `TRUE`, paired with `extract_from_tdf`, returns the converted `tdl` object with the extracted `hmap` attached instead of just returning the extracted map.
 #' @param ... Operation-specific arguments passed to underlying child functions.
 #'   For `retrieve_weight`: `allow_discrepancy` (allow an OLS intercept),
 #'   `rescale` (rescale weights to sum to 1), and `force` (continue when individual
@@ -42,9 +50,10 @@
 #' @details
 #' **Operation Priority:**
 #' `hmap()` evaluates exactly one operation per call in this priority order:
-#' `weight` > `retrieve_weight` > `add_weight` > `get_stat` >
-#' `detect_disaggregation_group` > `add` > `set` > `compact` >
-#' `prune_data` > `sync_data` > `resync_data`.
+#' `check_weight` > `weight` > `retrieve_weight` > `add_weight` > `get_stat` >
+#' `detect_disaggregation_group` > `add` > `set` > `compact` > `delete` >
+#' `prune_data` > `sync_data` > `resync_data` > `set_settings` > `get_settings` >
+#' `missing_summary` > `extract_from_tdf`.
 #' If no operation is requested, it returns the raw hierarchy map attached to `tdl`.
 #'
 #' **Formula-Based Additions (`add`):**
@@ -82,10 +91,14 @@
 #' Polymorphic output based on the requested operation:
 #' \itemize{
 #'   \item **Default:** The `hmap` data frame.
+#'   \item **`check_weight`:** A boolean (`TRUE` / `FALSE`) validating structure.
 #'   \item **`weight` / `retrieve_weight`:** A data frame of current or estimated weights.
 #'   \item **`get_stat`:** A list containing `from_to_map` and `waterfalls`.
 #'   \item **`detect_disaggregation_group`:** Character string of the best-matching group.
-#'   \item **`add_weight` / `add` / `set` / `compact` / `prune_data` / `sync_data` / `resync_data`:** The modified `tdl` object.
+#'   \item **`add_weight` / `add` / `set` / `compact` / `delete` / `prune_data` / `sync_data` / `resync_data` / `set_settings`:** The modified `tdl` object.
+#'   \item **`get_settings`:** The requested setting value.
+#'   \item **`missing_summary`:** A data frame summarizing missing values.
+#'   \item **`extract_from_tdf`:** The extracted `hmap` data frame (or `tdl` object if `extract_from_tdf_and_convert_to_long` is `TRUE`).
 #' }
 #'
 #' @export
@@ -94,9 +107,10 @@ hmap <- function(
     check_weight = FALSE,
     weight = FALSE, retrieve_weight = FALSE, add_weight = NULL, normalise_weight = FALSE,
     get_stat = FALSE, detect_disaggregation_group = NULL,
-    add = NULL, set = NULL, compact = FALSE,
+    add = NULL, set = NULL, compact = FALSE, delete = FALSE,
     prune_data = FALSE, sync_data = FALSE, resync_data = FALSE,
     set_settings = list(), get_settings = NULL, missing_summary = FALSE,
+    extract_from_tdf = FALSE, extract_from_tdf_and_convert_to_long = FALSE,
     ...){
 
   # Get Hmap
@@ -189,6 +203,11 @@ hmap <- function(
     )
   }
 
+  if(delete){
+    attr(tdl,"hmap") <- NULL
+    return(tdl)
+  }
+
   if(prune_data){
     return(hmap_prune_data(tdl))
   }
@@ -246,6 +265,14 @@ hmap <- function(
 
   if(missing_summary){
     return(hmap_missing_summary(tdl))
+  }
+
+  if(extract_from_tdf && is_tdf(tdl)){
+    return(
+      hmap_extract_from_tdf_headline_split(
+        tdl,
+        extract_and_convert_to_tdl = extract_from_tdf_and_convert_to_long)
+    )
   }
 
 
@@ -928,7 +955,7 @@ hmap_missing_summary <- function(tdl){
     key_df_ext <- key_df |>
       dplyr::cross_join(
         dplyr::distinct(
-          dplyr::tibble(meta.name = hm[[dg]], meta.disaggregation_group = dg)))
+          dplyr::tibble(meta.name = hm[[dg]], meta.disaggregation_group = dg, meta.n_names_in_dg = length(unique( hm[[dg]])))))
 
     k_chk <- tdl |>
       dplyr::full_join(
@@ -945,7 +972,7 @@ hmap_missing_summary <- function(tdl){
     k_missed <- k_chk |>
       dplyr::filter(is.na(.data[[value_col]]))
 
-    k_missed <- k_missed[c("time","meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group")] |> dplyr::distinct()
+    k_missed <- k_missed[c("time","meta.release_tag","meta.price_basis","meta.name","meta.disaggregation_group","meta.n_names_in_dg")] |> dplyr::distinct()
 
     k_missed$meta.full_dg_missed <- length(setdiff(hm[[dg]],k_missed$meta.name))==0
 
@@ -955,5 +982,53 @@ hmap_missing_summary <- function(tdl){
   missing_hs <- colnames(hm) |> purrr::map(for_a_dg) |> dplyr::bind_rows()
 
   missing_hs
+}
+
+# from headline_splits form of tdf retrieve the hmap or try to retrieve
+hmap_extract_from_tdf_headline_split <- function(td, extract_and_convert_to_tdl = FALSE){
+
+  # It survives hmap also if present
+  cns <- colnames(td) |> setdiff("time") |> unique()
+  dummy_hmap <- dplyr::tibble(
+    # 1 position is at random and can be anything it will be rectified later
+    lvl1 = cns[-1], indicator = cns[1]
+  )
+  med_time <- td$time[round(median(1:length(td$time)))]
+
+  tdl <- as_tdf_long(td, .hmap = dummy_hmap)
+
+  # Predict wtds based on recent 50 % data only
+  tdl_this <- tdl |> dplyr::filter(time >= med_time)
+  wts1 <- hmap(tdl_this, retrieve_weight = TRUE)
+  if(any(wts1$wtd<0) && (sum(wts1$wtd>0)==1)){
+    # This means it solvable
+    same_side <- c(wts1$meta.name[wts1$wtd<0], dummy_hmap$indicator)
+    same_side <- same_side |> unique()
+    hmap2 <- dplyr::tibble(
+      lvl1 = same_side, indicator = setdiff(cns, same_side)
+    )
+
+    tdl <- as_tdf_long(td, .hmap = hmap2)
+    tdl_this <- tdl |> dplyr::filter(time >= med_time)
+    wts2 <- hmap(tdl_this, retrieve_weight = TRUE)
+
+    if(!all(wts2$wtd>0)){
+      stop("Automatic hmap extraction failed!", call. = FALSE)
+    }
+
+    tdl <- hmap(tdl, add_weight = wts2, normalise_weight = round(abs(1-sum(wts2$wtd)), 2))
+
+  } else if(all(wts1$wtd>0)){
+    # it mean dummy hmap is actual hmap and the wtd is actual wtd (just add the wts)
+    tdl <- hmap(tdl, add_weight = wts1, normalise_weight = round(abs(1-sum(wts1$wtd)), 2))
+  } else {
+    stop("Automatic hmap extraction failed!", call. = FALSE)
+  }
+
+  if(extract_and_convert_to_tdl) return(tdl)
+
+  # Else return only hmap
+  hmap(tdl)
+
 }
 

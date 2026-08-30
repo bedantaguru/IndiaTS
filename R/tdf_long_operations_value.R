@@ -896,18 +896,35 @@ compute_metric.tdf <- function(
     .options = list(
       level_lag_n = 1,
       level_lead_n = 1,
-      .custom_function = c("on_level","data")
+      .custom_function = c("on_level","data"),
+      .recompute_hmap = FALSE
     ),
-    .omit_na = NULL
+    .omit_na = FALSE
 ) {
 
   # This needs to run before any further variable definition
   all_args <- as.list(environment())
 
+  parent_metrics <- c(
+    "share_pct",
+    "share_prev_prd",
+    "share_prev_year",
+    "contribution_growth_rate",
+    "contribution_momentum",
+    "contribution_growth_rate_pct",
+    "contribution_momentum_pct"
+  )
+
+  hmap_recon <- function(dat){
+    hmap(dat, extract_from_tdf = TRUE, extract_from_tdf_and_convert_to_long = TRUE)
+  }
+
+
   if(!is.logical(.omit_na)){
-    dchk <- stats::na.omit(dat)
-    # If main data does not have NA then omit NA otherwise not
-    .omit_na <- NROW(dchk)==NROW(dat)
+    # dchk <- stats::na.omit(dat)
+    # # If main data does  have small number of NA then omit NA otherwise not
+    # .omit_na <- (NROW(dchk)/NROW(dat)>0.95)
+    .omit_na <- FALSE
   }
 
   f_mode <- is.function(.custom_function)
@@ -955,6 +972,7 @@ compute_metric.tdf <- function(
     metric_args <- all_args[setdiff(names(all_args), c("dat",".custom_function",".options",".omit_na"))]
     requested <- names(metric_args)[unlist(metric_args) == TRUE]
 
+
     if (length(requested) > 1) {
       stop("Conflicting arguments: You can set a maximum of ONE of the metric arguments to TRUE for a wide .tdf.", call. = FALSE)
     }
@@ -963,7 +981,28 @@ compute_metric.tdf <- function(
 
   }
 
-  dl <- as_tdf_long(dat)
+  dl <- NULL
+
+  if((requested %in% parent_metrics) || isTRUE(.options$.recompute_hmap)){
+    dl <- tryCatch(
+      hmap_recon(dat), error = function(e) NULL
+    )
+    if(is.null(dl)){
+      warning(
+        "Parent-level reconstruction could not be completed. ",
+        "The requested metric <",
+        requested,
+        "> may therefore be unavailable.",
+        call. = FALSE
+      )
+    }
+
+    dl <- attach_parent(dl)
+
+  }
+
+  if(is.null(dl)) dl <- as_tdf_long(dat)
+
   dl2 <- compute_metrics_engine(dl, requested, metric_registry_this)
   d2 <- as_tdf(dl2, value_name = requested[1])
   if(.omit_na) {

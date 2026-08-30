@@ -53,6 +53,11 @@ as_tdf_long.tdf <- function(.data, .hmap = NULL, value_col_name = "level", ...){
       meta.release_order = 0,
       meta.price_basis = "AsIs")
 
+  if(is.null(.hmap) && !is.null(hmap(.data))){
+    # retrieve from .data itself
+    .hmap <- hmap(.data)
+  }
+
   if(is.data.frame(.hmap) && !is.null(.hmap)){
     d2 <- d1 |> dplyr::distinct(meta.name)
     d2$meta.disaggregation_group <-  d2$meta.name |>
@@ -67,6 +72,9 @@ as_tdf_long.tdf <- function(.data, .hmap = NULL, value_col_name = "level", ...){
   } else {
     d1$meta.disaggregation_group <- "indicator"
   }
+
+  # Filter value.level NA
+  d1 <- d1[!is.na(d1[[value_col_name_this]]),]
 
   as_tdf_long.tbl(.data = d1, .hmap = .hmap, ...)
 

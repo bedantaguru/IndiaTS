@@ -16,17 +16,22 @@ hmap(
   add = NULL,
   set = NULL,
   compact = FALSE,
+  delete = FALSE,
   prune_data = FALSE,
   sync_data = FALSE,
   resync_data = FALSE,
   set_settings = list(),
   get_settings = NULL,
   missing_summary = FALSE,
+  extract_from_tdf = FALSE,
+  extract_from_tdf_and_convert_to_long = FALSE,
   ...
 )
 }
 \arguments{
 \item{tdl}{A long-format time-series data frame containing an \code{hmap} attribute.}
+
+\item{check_weight}{Logical. Validates if the currently attached weights are structurally correct.}
 
 \item{weight}{Logical. Return the currently attached aggregation weights (\code{wtd}).}
 
@@ -36,6 +41,8 @@ regressions between parent and child series.}
 \item{add_weight}{A data frame of custom weights to attach. Required columns:
 \code{meta.name}, \code{meta.parent}, \code{wtd}, \code{meta.disaggregation_group}, and
 \code{meta.parent_disaggregation_group}.}
+
+\item{normalise_weight}{Logical. If \code{TRUE}, normalizes weights (so they sum to 1) when applying via \code{add_weight}.}
 
 \item{get_stat}{Logical. Return hierarchy statistics, including parent-child
 mappings and waterfalls.}
@@ -50,6 +57,8 @@ or a named list of formulas to merge into \code{hmap}.}
 
 \item{compact}{Logical. Compact \code{tdl} and \code{hmap} by removing unmapped data.}
 
+\item{delete}{Logical. If \code{TRUE}, removes the \code{hmap} attribute entirely from \code{tdl}.}
+
 \item{prune_data}{Logical. Reduce the \code{tdl} data frame to the bare minimum observations
 (lowest waterfall rank) required to aggregate up to main figures without redundancy.}
 
@@ -58,6 +67,16 @@ the hierarchy using existing base components.}
 
 \item{resync_data}{Logical. Perform a complete data reset by first pruning
 (\code{prune_data = TRUE}) and then recalculating all layers (\code{sync_data = TRUE}).}
+
+\item{set_settings}{A named list of settings to append or update in the \code{hmap} attributes.}
+
+\item{get_settings}{Character string specifying the setting name to retrieve.}
+
+\item{missing_summary}{Logical. If \code{TRUE}, returns a data frame summarizing missing values across disaggregation layers and time periods.}
+
+\item{extract_from_tdf}{Logical. If \code{TRUE} and \code{tdl} is actually a wide-format \code{tdf}, attempts to auto-discover the parent-child hierarchy map and weights (headline vs. splits).}
+
+\item{extract_from_tdf_and_convert_to_long}{Logical. If \code{TRUE}, paired with \code{extract_from_tdf}, returns the converted \code{tdl} object with the extracted \code{hmap} attached instead of just returning the extracted map.}
 
 \item{...}{Operation-specific arguments passed to underlying child functions.
 For \code{retrieve_weight}: \code{allow_discrepancy} (allow an OLS intercept),
@@ -69,10 +88,14 @@ orphaned data in \code{tdl} is actively removed alongside the compacted map.}
 Polymorphic output based on the requested operation:
 \itemize{
 \item \strong{Default:} The \code{hmap} data frame.
+\item \strong{\code{check_weight}:} A boolean (\code{TRUE} / \code{FALSE}) validating structure.
 \item \strong{\code{weight} / \code{retrieve_weight}:} A data frame of current or estimated weights.
 \item \strong{\code{get_stat}:} A list containing \code{from_to_map} and \code{waterfalls}.
 \item \strong{\code{detect_disaggregation_group}:} Character string of the best-matching group.
-\item \strong{\code{add_weight} / \code{add} / \code{set} / \code{compact} / \code{prune_data} / \code{sync_data} / \code{resync_data}:} The modified \code{tdl} object.
+\item \strong{\code{add_weight} / \code{add} / \code{set} / \code{compact} / \code{delete} / \code{prune_data} / \code{sync_data} / \code{resync_data} / \code{set_settings}:} The modified \code{tdl} object.
+\item \strong{\code{get_settings}:} The requested setting value.
+\item \strong{\code{missing_summary}:} A data frame summarizing missing values.
+\item \strong{\code{extract_from_tdf}:} The extracted \code{hmap} data frame (or \code{tdl} object if \code{extract_from_tdf_and_convert_to_long} is \code{TRUE}).
 }
 }
 \description{
@@ -84,9 +107,10 @@ disaggregation groups, or modify/compact the hierarchy.
 \details{
 \strong{Operation Priority:}
 \code{hmap()} evaluates exactly one operation per call in this priority order:
-\code{weight} > \code{retrieve_weight} > \code{add_weight} > \code{get_stat} >
-\code{detect_disaggregation_group} > \code{add} > \code{set} > \code{compact} >
-\code{prune_data} > \code{sync_data} > \code{resync_data}.
+\code{check_weight} > \code{weight} > \code{retrieve_weight} > \code{add_weight} > \code{get_stat} >
+\code{detect_disaggregation_group} > \code{add} > \code{set} > \code{compact} > \code{delete} >
+\code{prune_data} > \code{sync_data} > \code{resync_data} > \code{set_settings} > \code{get_settings} >
+\code{missing_summary} > \code{extract_from_tdf}.
 If no operation is requested, it returns the raw hierarchy map attached to \code{tdl}.
 
 \strong{Formula-Based Additions (\code{add}):}
