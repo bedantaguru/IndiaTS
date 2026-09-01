@@ -424,7 +424,12 @@ compute_metrics_engine <- function(dat, requested, registry) {
 
   # Check for wtd is exists
   wchk <- hmap(dat, check_weight = TRUE)
-  if(isTRUE(wchk)){
+  if(
+    # When wtd is present and
+    isTRUE(wchk) &&
+    # When parent exists
+    all(c("meta.parent", "meta.parent_disaggregation_group") %in% colnames(dat))
+  ){
 
     wtd <- hmap(dat, weight = TRUE)
 
