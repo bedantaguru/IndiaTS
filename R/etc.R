@@ -86,21 +86,84 @@ pkg_user_dir <- function(which = "data") {
 }
 
 
-cols_causing_group_variation <- function(d, group_colnames) {
 
+#' Identify Columns Varying Within Groups
+#'
+#' Identifies non-grouping columns in a data frame or tibble that have more than
+#' one distinct value within at least one group (i.e., columns that break
+#' group-level uniqueness).
+#'
+#' @param d A `data.frame` or `tibble` (grouped or ungrouped).
+#' @param group_colnames Character vector of column names defining the groups.
+#'   If omitted, existing grouping variables from `d` are used (see Details).
+#' @param auto_group Logical; if `TRUE` (default) and `d` is ungrouped with
+#'   fewer than `1e8` rows, a single dummy group is created across the entire
+#'   dataset so that overall column variation can be evaluated when
+#'   `group_colnames` is omitted.
+#'
+#' @details
+#' For each column not in `group_colnames`, the function computes the number of
+#' distinct values within each group using [dplyr::n_distinct()]. Any column
+#' whose maximum distinct count across groups exceeds 1 is returned, preserving
+#' the original column order of `d`.
+#'
+#' Edge cases:
+#' * Returns `character(0)` if `d` has 0 rows or if `group_colnames` covers all
+#'   columns in `d`.
+#' * If `group_colnames` is missing and `d` is not grouped (e.g.,
+#'   `auto_group = FALSE` or `NROW(d) >= 1e8`), all original column names are
+#'   returned.
+#'
+#' @return A character vector of column names from `d` that vary within at least
+#'   one group, or `character(0)` if no columns vary.
+#'
+#' @export
+#'
+#' @examples
+#' df <- data.frame(
+#'   id = c(1, 1, 2, 2),
+#'   const_in_grp = c("a", "a", "b", "b"),
+#'   varies_in_grp = c(10, 20, 30, 30)
+#' )
+#'
+#' # Specify grouping columns explicitly
+#' cols_causing_group_variation(df, group_colnames = "id")
+#'
+#' # Use existing dplyr grouping
+#' df |>
+#'   dplyr::group_by(id) |>
+#'   cols_causing_group_variation()
+#'
+#' # Check variation across the entire ungrouped data frame
+#' cols_causing_group_variation(df)
+cols_causing_group_variation <- function(d, group_colnames, auto_group = TRUE) {
   if (!inherits(d, "data.frame")) {
     stop("`d` must be a data.frame or tibble.")
   }
 
+  if (NROW(d) == 0) {
+    return(character(0))
+  }
+
+  # Before any edits to d
+  orig_col_names <- colnames(d)
+
+  if (auto_group) {
+    if (NROW(d) < 10^8) {
+      if (!dplyr::is_grouped_df(d)) {
+        d$.cosnt_dummy_col <- 1
+        d <- d |> dplyr::group_by(.data$.cosnt_dummy_col)
+      }
+    }
+  }
+
   # If group columns not supplied
   if (missing(group_colnames)) {
-
     if (dplyr::is_grouped_df(d)) {
       group_colnames <- dplyr::group_vars(d)
     } else {
-      return(colnames(d))
+      return(intersect(orig_col_names, colnames(d)))
     }
-
   }
 
   group_colnames <- unique(group_colnames)
@@ -113,25 +176,24 @@ cols_causing_group_variation <- function(d, group_colnames) {
   rest_cols <- setdiff(colnames(d), group_colnames)
 
   # Compute within-group distinct counts
-  d2 <- d %>%
-    dplyr::ungroup() %>%
-    dplyr::group_by(dplyr::across(dplyr::all_of(group_colnames))) %>%
+  d2 <- d |>
+    dplyr::ungroup() |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_colnames))) |>
     dplyr::summarise(
       dplyr::across(dplyr::all_of(rest_cols), dplyr::n_distinct),
       .groups = "drop"
     )
 
   # Max distinct count for each column across groups
-  max_counts <- d2 %>%
+  max_counts <- d2 |>
     dplyr::summarise(dplyr::across(dplyr::all_of(rest_cols), max))
 
   max_counts <- as.matrix(max_counts)
 
   # Columns with variation (>1)
-  colnames(max_counts)[max_counts > 1]
-
+  out <- colnames(max_counts)[max_counts > 1]
+  intersect(orig_col_names, out)
 }
-
 
 rows_append_distinct_df <- function(dmain, dincre, primary_key, type = c("left", "right")) {
 
@@ -242,7 +304,26 @@ rows_append_distinct <- function(dmain, dincre = NULL, primary_key, type = c("le
   }
 }
 
-
+#' Quartile Deviation
+#'
+#' Computes the semi-interquartile range (quartile deviation) of a numeric
+#' vector, or a generalized quantile-based half-spread for a custom probability.
+#'
+#' @param x A numeric vector.
+#' @param na.rm Logical; if `TRUE` (default), `NA` values are removed before
+#'   computing quantiles.
+#' @param prob Numeric scalar in `(0, 1)` specifying the lower tail probability
+#'   (default `0.25` for standard quartiles). Values greater than `0.5` are
+#'   automatically mirrored to `1 - prob`.
+#'
+#' @return A single numeric value representing `(Q_{1-prob} - Q_{prob}) / 2`.
+#'
+#' @importFrom stats quantile
+#' @export
+#'
+#' @examples
+#' quartile_deviation(c(1, 2, 4, 7, 10, 15))
+#' quartile_deviation(c(1, 2, 4, 7, 10, 15), prob = 0.1)
 quartile_deviation <- function(x, na.rm = TRUE, prob = 0.25) {
   prob <- min(prob, 1-prob)
   q <- quantile(x, probs = c(prob, 1-prob), na.rm = na.rm)
@@ -251,6 +332,7 @@ quartile_deviation <- function(x, na.rm = TRUE, prob = 0.25) {
 }
 
 
+# Duplicate : janitor::remove_constant()
 drop_constant_cols <- function(data, na = FALSE) {
 
   data %>%

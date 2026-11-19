@@ -10,11 +10,14 @@ tdf_long_list_class <- c("tdf_long_list", "list")
 
 tdf_long_class <- c("tdf_long", "tibble_with_attrs", "tbl", "data.frame")
 
+temporally_linked_tdf_long_class <- c("temporally_linked_tdf_long","list")
+
 # Set the old class for S4 methods compatibility
 methods::setOldClass(fiscal_period_class)
 methods::setOldClass(tdf_class)
 methods::setOldClass(tdf_long_list_class)
 methods::setOldClass(tdf_long_class)
+methods::setOldClass(temporally_linked_tdf_long_class)
 
 #' @export
 print.fiscal_period <- function(x, ...){
@@ -32,6 +35,12 @@ print.calendar_period <- function(x, ...){
 print.tdf <- function(x, ...){
   cat("A Time-Data-Frame (tdf) object\n\n")
   print(tibble::as_tibble(x))
+}
+
+
+#' @export
+print.temporally_linked_tdf_long <- function(x, ...){
+  cat("A 'temporally linked tdf long' object\n")
 }
 
 #' @export
@@ -59,16 +68,35 @@ print.tdf_long <- function(x, ...) {
     cat(paste0(" * Grouped with gropued vars: ", paste0(gvars, collapse = ", "), "\n\n"))
   }
 
+  # 0. Completeness
+  req_cols <- c("time", "meta.release_tag", "meta.price_basis", "meta.name",
+                "meta.disaggregation_group")
+
+  def_cols <- setdiff(req_cols, names(x))
+  if(length(def_cols)>0) {
+    cat(paste0(" * Note: ", paste0(def_cols, collapse = ", "), " - cols not present. \n\n"))
+  }
+
   cat("Meta-Info:-\n")
+
+
   # 1. Disaggregation layers
   hmap_cols <- NCOL(attr(x, "hmap"))
+  n_active_dgs <- 0
+  n_active_tag <- ""
   layer_text <- if (!is.null(hmap_cols) && hmap_cols > 1) hmap_cols else "no"
-  cat(paste0(" * ", layer_text, " disaggregation layers\n"))
+  if(hmap_cols>0 && ("meta.disaggregation_group" %in% names(x))){
+    n_active_dgs <- x$meta.disaggregation_group |> intersect(colnames(attr(x, "hmap"))) |> length()
+    n_active_tag <- ifelse(n_active_dgs<hmap_cols, paste0(" (",n_active_dgs, "-active)"), "")
+  }
+  cat(paste0(" * ", layer_text, " disaggregation layers", n_active_tag, "\n"))
 
   # 2. Time periods
   if ("time" %in% names(x)) {
     n_time <- length(unique(x$time))
-    cat(paste0(" * ", n_time, " unique time periods\n"))
+    continuous_tag <- ifelse(is_continuous(x$time), "continuous", "< DISCONTINUOUS >")
+    to_from_tag <- paste0(min(x$time), " to ", max(x$time))
+    cat(paste0(" * ", n_time, " unique ", continuous_tag," time periods; (",to_from_tag,")\n"))
   }
 
   # 3. Release tags (Only prints if > 1)
